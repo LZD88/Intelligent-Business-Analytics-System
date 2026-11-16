@@ -1,3 +1,7 @@
+if (typeof window !== "undefined") {
+  const { requireSession } = await import("./session.mjs");
+  await requireSession();
+}
 import { disposeCharts, mountCharts, renderVisualizations } from "./charts.mjs";
 import { renderValidation, renderPlanConsole, collectEdits, renderEvidenceDialog } from "./analysis-tools.mjs";
 import { historyApi, JobClient, renderFeedback, renderPersistentHistory, renderSuspension } from "./query-jobs.mjs";
@@ -96,6 +100,7 @@ export function renderAnalysisReport(report) {
   return `<section class="analysis-report">
     <div class="report-header"><div><span>中文分析报告</span><h3>${escapeHtml(report.title)}</h3></div><span class="report-source">${report.source === "summary_agent" ? "总结 Agent" : report.source === "conversation_report" ? "历史报告汇总" : "安全模板"}</span></div>
     <div class="report-summary"><h4>执行摘要</h4><p>${escapeHtml(report.executive_summary)}</p></div>
+    ${report.verification?.boundary ? `<div class="notice report-verification"><strong>报告核验</strong><p>${escapeHtml(report.verification.boundary)}</p></div>` : ""}
     ${findings ? `<div class="report-section"><h4>核心发现</h4>${findings}</div>` : ""}
     ${caveats ? `<div class="report-section"><h4>局限</h4><ul>${caveats}</ul></div>` : ""}
     <div class="report-section"><h4>业务建议</h4><p>${escapeHtml(report.recommendation_reason ?? "建议基于已校验证据生成。")}</p>${recommendations || '<p class="notice">数据不足，暂不生成具体业务行动项。请补充可比指标、同期或目标数据。</p>'}</div>
