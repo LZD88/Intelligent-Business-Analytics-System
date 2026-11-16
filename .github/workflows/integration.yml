@@ -16,7 +16,7 @@ concurrency:
 jobs:
   integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     services:
       mysql:
         image: mysql:8.0
@@ -89,6 +89,12 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.CHATBI_CHAT_API_KEY }}
           OPENAI_BASE_URL: ${{ vars.CHATBI_CHAT_BASE_URL || 'https://api.deepseek.com/v1' }}
           LLM_MODEL: ${{ vars.CHATBI_CHAT_MODEL || 'deepseek-chat' }}
+          LLM_THINKING: ${{ vars.CHATBI_LLM_THINKING || 'auto' }}
+          LLM_SQL_MODEL: ${{ vars.CHATBI_SQL_MODEL }}
+          LLM_PLANNER_MODEL: ${{ vars.CHATBI_PLANNER_MODEL }}
+          LLM_EXECUTOR_MODEL: ${{ vars.CHATBI_EXECUTOR_MODEL }}
+          LLM_VALIDATOR_MODEL: ${{ vars.CHATBI_VALIDATOR_MODEL }}
+          LLM_SUMMARY_MODEL: ${{ vars.CHATBI_SUMMARY_MODEL }}
           INTENT_API_KEY: ${{ secrets.CHATBI_INTENT_API_KEY }}
           INTENT_BASE_URL: https://dashscope.aliyuncs.com/compatible-mode/v1
           INTENT_MODEL: qwen-plus

@@ -165,10 +165,9 @@ class Evaluator:
 
     @staticmethod
     def _normalize_value(value: Any) -> Any:
-        if isinstance(value, Decimal):
-            return ("number", value.normalize())
-        if isinstance(value, float):
-            return ("number", round(value, 9))
+        if isinstance(value, (Decimal, float, int)) and not isinstance(value, bool):
+            number = Decimal(str(value))
+            return ("number", number.quantize(Decimal("0.000000001"))) if number.is_finite() else ("number", str(number))
         if isinstance(value, (int, str, bytes, type(None), bool)):
             return (type(value).__name__, value)
         return (type(value).__name__, str(value))

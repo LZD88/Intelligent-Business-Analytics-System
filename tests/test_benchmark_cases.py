@@ -66,11 +66,14 @@ def test_expected_sql_executes_on_demo_mysql() -> None:
     )
     security = QuerySecurityManager()
     try:
-        for case in load_benchmark()["cases"]:
+        from scripts.evaluate_release import load_cases
+        simple, complex_cases, behaviors = load_cases("full")
+        all_cases = simple + complex_cases + [case for case in behaviors if "expected_sql" in case]
+        for case in all_cases:
             columns, rows = client.execute(security.secure(case["expected_sql"]))
             assert columns, case["id"]
-            # Dynamic windows can legitimately be empty as the fixed seed ages.
-            if case["category"] != "dynamic_time":
+            # Boundary and previous-year followups intentionally contain no rows.
+            if case.get("category") not in {"dynamic_time", "empty_result"} and case.get("id") != "followup-3":
                 assert rows, case["id"]
     finally:
         client.close()
