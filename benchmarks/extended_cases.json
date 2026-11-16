@@ -1,0 +1,1219 @@
+{
+  "version": "3.0.0",
+  "database_snapshot": "chatbi-mvp-seed-2026-11-09",
+  "cases": [
+    {
+      "id": "extended-sales-count-all",
+      "domain": "销售",
+      "metric": "完成订单数",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按地区统计完成订单数，仅输出地区和完成订单数两列。",
+      "business_definition": "按治理口径计算完成订单数；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT o.region,COUNT(DISTINCT o.order_id) FROM sales_orders o WHERE o.order_status='completed' GROUP BY o.region"
+    },
+    {
+      "id": "extended-sales-count-filtered",
+      "domain": "销售",
+      "metric": "完成订单数",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按地区统计完成订单数，仅输出地区和完成订单数两列。",
+      "business_definition": "按治理口径计算完成订单数；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT o.region,COUNT(DISTINCT o.order_id) FROM sales_orders o WHERE o.order_status='completed' AND o.order_date>='2026-07-01' AND o.order_date<'2026-10-01' GROUP BY o.region"
+    },
+    {
+      "id": "extended-sales-revenue-all",
+      "domain": "销售",
+      "metric": "收入",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按地区统计收入，仅输出地区和收入两列。",
+      "business_definition": "按治理口径计算收入；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT o.region,SUM(o.net_amount*r.rate_to_cny) FROM sales_orders o JOIN exchange_rates r ON o.order_date=r.rate_date AND o.currency=r.currency WHERE o.order_status='completed' GROUP BY o.region"
+    },
+    {
+      "id": "extended-sales-revenue-filtered",
+      "domain": "销售",
+      "metric": "收入",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按地区统计收入，仅输出地区和收入两列。",
+      "business_definition": "按治理口径计算收入；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT o.region,SUM(o.net_amount*r.rate_to_cny) FROM sales_orders o JOIN exchange_rates r ON o.order_date=r.rate_date AND o.currency=r.currency WHERE o.order_status='completed' AND o.order_date>='2026-07-01' AND o.order_date<'2026-10-01' GROUP BY o.region"
+    },
+    {
+      "id": "extended-sales-cost-all",
+      "domain": "盈利",
+      "metric": "销售成本",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按产品线统计销售成本，仅输出产品线和销售成本两列。",
+      "business_definition": "按治理口径计算销售成本；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT p.product_line,SUM((p.material_cost+p.labor_cost)*o.quantity) FROM sales_orders o JOIN dim_products p ON o.product_id=p.product_id WHERE o.order_status='completed' GROUP BY p.product_line"
+    },
+    {
+      "id": "extended-sales-cost-filtered",
+      "domain": "盈利",
+      "metric": "销售成本",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按产品线统计销售成本，仅输出产品线和销售成本两列。",
+      "business_definition": "按治理口径计算销售成本；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT p.product_line,SUM((p.material_cost+p.labor_cost)*o.quantity) FROM sales_orders o JOIN dim_products p ON o.product_id=p.product_id WHERE o.order_status='completed' AND o.order_date>='2026-07-01' AND o.order_date<'2026-10-01' GROUP BY p.product_line"
+    },
+    {
+      "id": "extended-sales-quantity-all",
+      "domain": "销售",
+      "metric": "销售数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按地区统计销售数量，仅输出地区和销售数量两列。",
+      "business_definition": "按治理口径计算销售数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT o.region,SUM(o.quantity) FROM sales_orders o WHERE o.order_status='completed' GROUP BY o.region"
+    },
+    {
+      "id": "extended-sales-quantity-filtered",
+      "domain": "销售",
+      "metric": "销售数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按地区统计销售数量，仅输出地区和销售数量两列。",
+      "business_definition": "按治理口径计算销售数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT o.region,SUM(o.quantity) FROM sales_orders o WHERE o.order_status='completed' AND o.order_date>='2026-07-01' AND o.order_date<'2026-10-01' GROUP BY o.region"
+    },
+    {
+      "id": "extended-sales-customers-all",
+      "domain": "客户",
+      "metric": "成交客户数",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按地区统计成交客户数，仅输出地区和成交客户数两列。",
+      "business_definition": "按治理口径计算成交客户数；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT o.region,COUNT(DISTINCT o.customer_id) FROM sales_orders o WHERE o.order_status='completed' GROUP BY o.region"
+    },
+    {
+      "id": "extended-sales-customers-filtered",
+      "domain": "客户",
+      "metric": "成交客户数",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按地区统计成交客户数，仅输出地区和成交客户数两列。",
+      "business_definition": "按治理口径计算成交客户数；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT o.region,COUNT(DISTINCT o.customer_id) FROM sales_orders o WHERE o.order_status='completed' AND o.order_date>='2026-07-01' AND o.order_date<'2026-10-01' GROUP BY o.region"
+    },
+    {
+      "id": "extended-sales-average-all",
+      "domain": "销售",
+      "metric": "平均订单金额",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按地区统计平均订单金额，仅输出地区和平均订单金额两列。",
+      "business_definition": "按治理口径计算平均订单金额；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT o.region,SUM(o.net_amount*r.rate_to_cny)/NULLIF(COUNT(DISTINCT o.order_id),0) FROM sales_orders o JOIN exchange_rates r ON o.order_date=r.rate_date AND o.currency=r.currency WHERE o.order_status='completed' GROUP BY o.region"
+    },
+    {
+      "id": "extended-sales-average-filtered",
+      "domain": "销售",
+      "metric": "平均订单金额",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按地区统计平均订单金额，仅输出地区和平均订单金额两列。",
+      "business_definition": "按治理口径计算平均订单金额；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT o.region,SUM(o.net_amount*r.rate_to_cny)/NULLIF(COUNT(DISTINCT o.order_id),0) FROM sales_orders o JOIN exchange_rates r ON o.order_date=r.rate_date AND o.currency=r.currency WHERE o.order_status='completed' AND o.order_date>='2026-07-01' AND o.order_date<'2026-10-01' GROUP BY o.region"
+    },
+    {
+      "id": "extended-sales-unit-all",
+      "domain": "销售",
+      "metric": "平均销售单价",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按地区统计平均销售单价，仅输出地区和平均销售单价两列。",
+      "business_definition": "按治理口径计算平均销售单价；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT o.region,SUM(o.net_amount*r.rate_to_cny)/NULLIF(SUM(o.quantity),0) FROM sales_orders o JOIN exchange_rates r ON o.order_date=r.rate_date AND o.currency=r.currency WHERE o.order_status='completed' GROUP BY o.region"
+    },
+    {
+      "id": "extended-sales-unit-filtered",
+      "domain": "销售",
+      "metric": "平均销售单价",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按地区统计平均销售单价，仅输出地区和平均销售单价两列。",
+      "business_definition": "按治理口径计算平均销售单价；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT o.region,SUM(o.net_amount*r.rate_to_cny)/NULLIF(SUM(o.quantity),0) FROM sales_orders o JOIN exchange_rates r ON o.order_date=r.rate_date AND o.currency=r.currency WHERE o.order_status='completed' AND o.order_date>='2026-07-01' AND o.order_date<'2026-10-01' GROUP BY o.region"
+    },
+    {
+      "id": "extended-sales-discount-all",
+      "domain": "销售",
+      "metric": "销售折扣金额",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按币种统计销售折扣金额，仅输出币种和销售折扣金额两列。",
+      "business_definition": "按治理口径计算销售折扣金额；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT o.currency,SUM(o.discount_amount) FROM sales_orders o WHERE o.order_status='completed' GROUP BY o.currency"
+    },
+    {
+      "id": "extended-sales-discount-filtered",
+      "domain": "销售",
+      "metric": "销售折扣金额",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按币种统计销售折扣金额，仅输出币种和销售折扣金额两列。",
+      "business_definition": "按治理口径计算销售折扣金额；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT o.currency,SUM(o.discount_amount) FROM sales_orders o WHERE o.order_status='completed' AND o.order_date>='2026-07-01' AND o.order_date<'2026-10-01' GROUP BY o.currency"
+    },
+    {
+      "id": "extended-purchase-count-all",
+      "domain": "采购",
+      "metric": "采购订单数",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按订单状态统计采购订单数，仅输出订单状态和采购订单数两列。",
+      "business_definition": "按治理口径计算采购订单数；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT po.order_status,COUNT(DISTINCT po.purchase_order_id) FROM purchase_orders po WHERE 1=1 GROUP BY po.order_status"
+    },
+    {
+      "id": "extended-purchase-count-filtered",
+      "domain": "采购",
+      "metric": "采购订单数",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按订单状态统计采购订单数，仅输出订单状态和采购订单数两列。",
+      "business_definition": "按治理口径计算采购订单数；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT po.order_status,COUNT(DISTINCT po.purchase_order_id) FROM purchase_orders po WHERE 1=1 AND po.order_date>='2026-07-01' AND po.order_date<'2026-10-01' GROUP BY po.order_status"
+    },
+    {
+      "id": "extended-purchase-amount-all",
+      "domain": "采购",
+      "metric": "采购金额",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按币种统计采购金额，仅输出币种和采购金额两列。",
+      "business_definition": "按治理口径计算采购金额；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT po.currency,SUM(po.total_amount) FROM purchase_orders po WHERE 1=1 GROUP BY po.currency"
+    },
+    {
+      "id": "extended-purchase-amount-filtered",
+      "domain": "采购",
+      "metric": "采购金额",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按币种统计采购金额，仅输出币种和采购金额两列。",
+      "business_definition": "按治理口径计算采购金额；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT po.currency,SUM(po.total_amount) FROM purchase_orders po WHERE 1=1 AND po.order_date>='2026-07-01' AND po.order_date<'2026-10-01' GROUP BY po.currency"
+    },
+    {
+      "id": "extended-purchase-quantity-all",
+      "domain": "采购",
+      "metric": "采购数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按供应商ID统计采购数量，仅输出供应商ID和采购数量两列。",
+      "business_definition": "按治理口径计算采购数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT po.supplier_id,SUM(poi.quantity) FROM purchase_order_items poi JOIN purchase_orders po ON poi.purchase_order_id=po.purchase_order_id WHERE 1=1 GROUP BY po.supplier_id"
+    },
+    {
+      "id": "extended-purchase-quantity-filtered",
+      "domain": "采购",
+      "metric": "采购数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按供应商ID统计采购数量，仅输出供应商ID和采购数量两列。",
+      "business_definition": "按治理口径计算采购数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT po.supplier_id,SUM(poi.quantity) FROM purchase_order_items poi JOIN purchase_orders po ON poi.purchase_order_id=po.purchase_order_id WHERE 1=1 AND po.order_date>='2026-07-01' AND po.order_date<'2026-10-01' GROUP BY po.supplier_id"
+    },
+    {
+      "id": "extended-purchase-received-all",
+      "domain": "采购",
+      "metric": "已收货数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按供应商ID统计已收货数量，仅输出供应商ID和已收货数量两列。",
+      "business_definition": "按治理口径计算已收货数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT po.supplier_id,SUM(poi.received_quantity) FROM purchase_order_items poi JOIN purchase_orders po ON poi.purchase_order_id=po.purchase_order_id WHERE 1=1 GROUP BY po.supplier_id"
+    },
+    {
+      "id": "extended-purchase-received-filtered",
+      "domain": "采购",
+      "metric": "已收货数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按供应商ID统计已收货数量，仅输出供应商ID和已收货数量两列。",
+      "business_definition": "按治理口径计算已收货数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT po.supplier_id,SUM(poi.received_quantity) FROM purchase_order_items poi JOIN purchase_orders po ON poi.purchase_order_id=po.purchase_order_id WHERE 1=1 AND po.order_date>='2026-07-01' AND po.order_date<'2026-10-01' GROUP BY po.supplier_id"
+    },
+    {
+      "id": "extended-purchase-rate-all",
+      "domain": "采购",
+      "metric": "采购收货率",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按供应商ID统计采购收货率，仅输出供应商ID和采购收货率两列。",
+      "business_definition": "按治理口径计算采购收货率；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT po.supplier_id,SUM(poi.received_quantity)/NULLIF(SUM(poi.quantity),0) FROM purchase_order_items poi JOIN purchase_orders po ON poi.purchase_order_id=po.purchase_order_id WHERE 1=1 GROUP BY po.supplier_id"
+    },
+    {
+      "id": "extended-purchase-rate-filtered",
+      "domain": "采购",
+      "metric": "采购收货率",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按供应商ID统计采购收货率，仅输出供应商ID和采购收货率两列。",
+      "business_definition": "按治理口径计算采购收货率；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT po.supplier_id,SUM(poi.received_quantity)/NULLIF(SUM(poi.quantity),0) FROM purchase_order_items poi JOIN purchase_orders po ON poi.purchase_order_id=po.purchase_order_id WHERE 1=1 AND po.order_date>='2026-07-01' AND po.order_date<'2026-10-01' GROUP BY po.supplier_id"
+    },
+    {
+      "id": "extended-supplier-count-all",
+      "domain": "供应商",
+      "metric": "活跃供应商数",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按国家统计活跃供应商数，仅输出国家和活跃供应商数两列。",
+      "business_definition": "按治理口径计算活跃供应商数；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT s.country,COUNT(DISTINCT s.supplier_id) FROM dim_suppliers s WHERE s.supplier_status='active' GROUP BY s.country"
+    },
+    {
+      "id": "extended-supplier-count-filtered",
+      "domain": "供应商",
+      "metric": "活跃供应商数",
+      "category": "aggregate_metric",
+      "difficulty": "medium",
+      "question": "仅统计国家非空的记录，活跃供应商数合计是多少？仅输出一个数值列。",
+      "business_definition": "按治理口径计算活跃供应商数；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT COUNT(DISTINCT s.supplier_id) FROM dim_suppliers s WHERE s.supplier_status='active' AND s.country IS NOT NULL"
+    },
+    {
+      "id": "extended-supplier-rating-all",
+      "domain": "供应商",
+      "metric": "供应商平均评分",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按供应商类别统计供应商平均评分，仅输出供应商类别和供应商平均评分两列。",
+      "business_definition": "按治理口径计算供应商平均评分；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT s.supplier_category,AVG(s.rating) FROM dim_suppliers s WHERE 1=1 GROUP BY s.supplier_category"
+    },
+    {
+      "id": "extended-supplier-rating-filtered",
+      "domain": "供应商",
+      "metric": "供应商平均评分",
+      "category": "aggregate_metric",
+      "difficulty": "medium",
+      "question": "仅统计供应商类别非空的记录，供应商平均评分合计是多少？仅输出一个数值列。",
+      "business_definition": "按治理口径计算供应商平均评分；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT AVG(s.rating) FROM dim_suppliers s WHERE 1=1 AND s.supplier_category IS NOT NULL"
+    },
+    {
+      "id": "extended-inventory-onhand-all",
+      "domain": "库存",
+      "metric": "库存数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "最新快照的按仓库ID统计库存数量，仅输出仓库ID和库存数量两列。",
+      "business_definition": "按治理口径计算库存数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT ib.warehouse_id,SUM(ib.quantity_on_hand) FROM inventory_balances ib WHERE ib.snapshot_date=(SELECT MAX(snapshot_date) FROM inventory_balances) GROUP BY ib.warehouse_id"
+    },
+    {
+      "id": "extended-inventory-onhand-filtered",
+      "domain": "库存",
+      "metric": "库存数量",
+      "category": "aggregate_metric",
+      "difficulty": "medium",
+      "question": "仅统计仓库ID非空的记录，最新快照的库存数量合计是多少？仅输出一个数值列。",
+      "business_definition": "按治理口径计算库存数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT SUM(ib.quantity_on_hand) FROM inventory_balances ib WHERE ib.snapshot_date=(SELECT MAX(snapshot_date) FROM inventory_balances) AND ib.warehouse_id IS NOT NULL"
+    },
+    {
+      "id": "extended-inventory-reserved-all",
+      "domain": "库存",
+      "metric": "预留库存数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "最新快照的按产品ID统计预留库存数量，仅输出产品ID和预留库存数量两列。",
+      "business_definition": "按治理口径计算预留库存数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT ib.product_id,SUM(ib.quantity_reserved) FROM inventory_balances ib WHERE ib.snapshot_date=(SELECT MAX(snapshot_date) FROM inventory_balances) GROUP BY ib.product_id"
+    },
+    {
+      "id": "extended-inventory-reserved-filtered",
+      "domain": "库存",
+      "metric": "预留库存数量",
+      "category": "aggregate_metric",
+      "difficulty": "medium",
+      "question": "仅统计产品ID非空的记录，最新快照的预留库存数量合计是多少？仅输出一个数值列。",
+      "business_definition": "按治理口径计算预留库存数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT SUM(ib.quantity_reserved) FROM inventory_balances ib WHERE ib.snapshot_date=(SELECT MAX(snapshot_date) FROM inventory_balances) AND ib.product_id IS NOT NULL"
+    },
+    {
+      "id": "extended-inventory-available-all",
+      "domain": "库存",
+      "metric": "可用库存",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "最新快照的按仓库ID统计可用库存，仅输出仓库ID和可用库存两列。",
+      "business_definition": "按治理口径计算可用库存；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT ib.warehouse_id,SUM(ib.quantity_on_hand-ib.quantity_reserved) FROM inventory_balances ib WHERE ib.snapshot_date=(SELECT MAX(snapshot_date) FROM inventory_balances) GROUP BY ib.warehouse_id"
+    },
+    {
+      "id": "extended-inventory-available-filtered",
+      "domain": "库存",
+      "metric": "可用库存",
+      "category": "aggregate_metric",
+      "difficulty": "medium",
+      "question": "仅统计仓库ID非空的记录，最新快照的可用库存合计是多少？仅输出一个数值列。",
+      "business_definition": "按治理口径计算可用库存；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT SUM(ib.quantity_on_hand-ib.quantity_reserved) FROM inventory_balances ib WHERE ib.snapshot_date=(SELECT MAX(snapshot_date) FROM inventory_balances) AND ib.warehouse_id IS NOT NULL"
+    },
+    {
+      "id": "extended-inventory-value-all",
+      "domain": "库存",
+      "metric": "库存金额",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "最新快照的按仓库ID统计库存金额，仅输出仓库ID和库存金额两列。",
+      "business_definition": "按治理口径计算库存金额；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT ib.warehouse_id,SUM(ib.inventory_value) FROM inventory_balances ib WHERE ib.snapshot_date=(SELECT MAX(snapshot_date) FROM inventory_balances) GROUP BY ib.warehouse_id"
+    },
+    {
+      "id": "extended-inventory-value-filtered",
+      "domain": "库存",
+      "metric": "库存金额",
+      "category": "aggregate_metric",
+      "difficulty": "medium",
+      "question": "仅统计仓库ID非空的记录，最新快照的库存金额合计是多少？仅输出一个数值列。",
+      "business_definition": "按治理口径计算库存金额；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT SUM(ib.inventory_value) FROM inventory_balances ib WHERE ib.snapshot_date=(SELECT MAX(snapshot_date) FROM inventory_balances) AND ib.warehouse_id IS NOT NULL"
+    },
+    {
+      "id": "extended-inventory-rate-all",
+      "domain": "库存",
+      "metric": "库存预留率",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "最新快照的按仓库ID统计库存预留率，仅输出仓库ID和库存预留率两列。",
+      "business_definition": "按治理口径计算库存预留率；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT ib.warehouse_id,SUM(ib.quantity_reserved)/NULLIF(SUM(ib.quantity_on_hand),0) FROM inventory_balances ib WHERE ib.snapshot_date=(SELECT MAX(snapshot_date) FROM inventory_balances) GROUP BY ib.warehouse_id"
+    },
+    {
+      "id": "extended-inventory-rate-filtered",
+      "domain": "库存",
+      "metric": "库存预留率",
+      "category": "aggregate_metric",
+      "difficulty": "medium",
+      "question": "仅统计仓库ID非空的记录，最新快照的库存预留率合计是多少？仅输出一个数值列。",
+      "business_definition": "按治理口径计算库存预留率；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT SUM(ib.quantity_reserved)/NULLIF(SUM(ib.quantity_on_hand),0) FROM inventory_balances ib WHERE ib.snapshot_date=(SELECT MAX(snapshot_date) FROM inventory_balances) AND ib.warehouse_id IS NOT NULL"
+    },
+    {
+      "id": "extended-inventory-inbound-all",
+      "domain": "库存",
+      "metric": "入库数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按产品ID统计入库数量，仅输出产品ID和入库数量两列。",
+      "business_definition": "按治理口径计算入库数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT it.product_id,SUM(it.quantity) FROM inventory_transactions it WHERE it.transaction_type='inbound' GROUP BY it.product_id"
+    },
+    {
+      "id": "extended-inventory-inbound-filtered",
+      "domain": "库存",
+      "metric": "入库数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按产品ID统计入库数量，仅输出产品ID和入库数量两列。",
+      "business_definition": "按治理口径计算入库数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT it.product_id,SUM(it.quantity) FROM inventory_transactions it WHERE it.transaction_type='inbound' AND it.transaction_date>='2026-07-01' AND it.transaction_date<'2026-10-01' GROUP BY it.product_id"
+    },
+    {
+      "id": "extended-inventory-outbound-all",
+      "domain": "库存",
+      "metric": "出库数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按产品ID统计出库数量，仅输出产品ID和出库数量两列。",
+      "business_definition": "按治理口径计算出库数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT it.product_id,SUM(ABS(it.quantity)) FROM inventory_transactions it WHERE it.transaction_type='outbound' GROUP BY it.product_id"
+    },
+    {
+      "id": "extended-inventory-outbound-filtered",
+      "domain": "库存",
+      "metric": "出库数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按产品ID统计出库数量，仅输出产品ID和出库数量两列。",
+      "business_definition": "按治理口径计算出库数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT it.product_id,SUM(ABS(it.quantity)) FROM inventory_transactions it WHERE it.transaction_type='outbound' AND it.transaction_date>='2026-07-01' AND it.transaction_date<'2026-10-01' GROUP BY it.product_id"
+    },
+    {
+      "id": "extended-production-planned-all",
+      "domain": "生产",
+      "metric": "计划生产数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按产品ID统计计划生产数量，仅输出产品ID和计划生产数量两列。",
+      "business_definition": "按治理口径计算计划生产数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT mo.product_id,SUM(mo.planned_quantity) FROM production_orders mo WHERE 1=1 GROUP BY mo.product_id"
+    },
+    {
+      "id": "extended-production-planned-filtered",
+      "domain": "生产",
+      "metric": "计划生产数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按产品ID统计计划生产数量，仅输出产品ID和计划生产数量两列。",
+      "business_definition": "按治理口径计算计划生产数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT mo.product_id,SUM(mo.planned_quantity) FROM production_orders mo WHERE 1=1 AND mo.start_date>='2026-07-01' AND mo.start_date<'2026-10-01' GROUP BY mo.product_id"
+    },
+    {
+      "id": "extended-production-actual-all",
+      "domain": "生产",
+      "metric": "实际产出数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按产品ID统计实际产出数量，仅输出产品ID和实际产出数量两列。",
+      "business_definition": "按治理口径计算实际产出数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT mo.product_id,SUM(prod_out.good_quantity+prod_out.defect_quantity) FROM production_outputs prod_out JOIN production_orders mo ON prod_out.production_order_id=mo.production_order_id WHERE 1=1 GROUP BY mo.product_id"
+    },
+    {
+      "id": "extended-production-actual-filtered",
+      "domain": "生产",
+      "metric": "实际产出数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按产品ID统计实际产出数量，仅输出产品ID和实际产出数量两列。",
+      "business_definition": "按治理口径计算实际产出数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT mo.product_id,SUM(prod_out.good_quantity+prod_out.defect_quantity) FROM production_outputs prod_out JOIN production_orders mo ON prod_out.production_order_id=mo.production_order_id WHERE 1=1 AND prod_out.output_date>='2026-07-01' AND prod_out.output_date<'2026-10-01' GROUP BY mo.product_id"
+    },
+    {
+      "id": "extended-production-good-all",
+      "domain": "生产",
+      "metric": "良品数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按产品ID统计良品数量，仅输出产品ID和良品数量两列。",
+      "business_definition": "按治理口径计算良品数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT mo.product_id,SUM(prod_out.good_quantity) FROM production_outputs prod_out JOIN production_orders mo ON prod_out.production_order_id=mo.production_order_id WHERE 1=1 GROUP BY mo.product_id"
+    },
+    {
+      "id": "extended-production-good-filtered",
+      "domain": "生产",
+      "metric": "良品数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按产品ID统计良品数量，仅输出产品ID和良品数量两列。",
+      "business_definition": "按治理口径计算良品数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT mo.product_id,SUM(prod_out.good_quantity) FROM production_outputs prod_out JOIN production_orders mo ON prod_out.production_order_id=mo.production_order_id WHERE 1=1 AND prod_out.output_date>='2026-07-01' AND prod_out.output_date<'2026-10-01' GROUP BY mo.product_id"
+    },
+    {
+      "id": "extended-production-defect-all",
+      "domain": "生产",
+      "metric": "不良品数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按产品ID统计不良品数量，仅输出产品ID和不良品数量两列。",
+      "business_definition": "按治理口径计算不良品数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT mo.product_id,SUM(prod_out.defect_quantity) FROM production_outputs prod_out JOIN production_orders mo ON prod_out.production_order_id=mo.production_order_id WHERE 1=1 GROUP BY mo.product_id"
+    },
+    {
+      "id": "extended-production-defect-filtered",
+      "domain": "生产",
+      "metric": "不良品数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按产品ID统计不良品数量，仅输出产品ID和不良品数量两列。",
+      "business_definition": "按治理口径计算不良品数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT mo.product_id,SUM(prod_out.defect_quantity) FROM production_outputs prod_out JOIN production_orders mo ON prod_out.production_order_id=mo.production_order_id WHERE 1=1 AND prod_out.output_date>='2026-07-01' AND prod_out.output_date<'2026-10-01' GROUP BY mo.product_id"
+    },
+    {
+      "id": "extended-production-yield-all",
+      "domain": "生产",
+      "metric": "生产良率",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按产品ID统计生产良率，仅输出产品ID和生产良率两列。",
+      "business_definition": "按治理口径计算生产良率；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT mo.product_id,SUM(prod_out.good_quantity)/NULLIF(SUM(prod_out.good_quantity+prod_out.defect_quantity),0) FROM production_outputs prod_out JOIN production_orders mo ON prod_out.production_order_id=mo.production_order_id WHERE 1=1 GROUP BY mo.product_id"
+    },
+    {
+      "id": "extended-production-yield-filtered",
+      "domain": "生产",
+      "metric": "生产良率",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按产品ID统计生产良率，仅输出产品ID和生产良率两列。",
+      "business_definition": "按治理口径计算生产良率；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT mo.product_id,SUM(prod_out.good_quantity)/NULLIF(SUM(prod_out.good_quantity+prod_out.defect_quantity),0) FROM production_outputs prod_out JOIN production_orders mo ON prod_out.production_order_id=mo.production_order_id WHERE 1=1 AND prod_out.output_date>='2026-07-01' AND prod_out.output_date<'2026-10-01' GROUP BY mo.product_id"
+    },
+    {
+      "id": "extended-quality-inspected-all",
+      "domain": "质量",
+      "metric": "检验数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按生产订单ID统计检验数量，仅输出生产订单ID和检验数量两列。",
+      "business_definition": "按治理口径计算检验数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT qi.production_order_id,SUM(qi.inspected_quantity) FROM quality_inspections qi WHERE 1=1 GROUP BY qi.production_order_id"
+    },
+    {
+      "id": "extended-quality-inspected-filtered",
+      "domain": "质量",
+      "metric": "检验数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按生产订单ID统计检验数量，仅输出生产订单ID和检验数量两列。",
+      "business_definition": "按治理口径计算检验数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT qi.production_order_id,SUM(qi.inspected_quantity) FROM quality_inspections qi WHERE 1=1 AND qi.inspection_date>='2026-07-01' AND qi.inspection_date<'2026-10-01' GROUP BY qi.production_order_id"
+    },
+    {
+      "id": "extended-quality-passed-all",
+      "domain": "质量",
+      "metric": "检验合格数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按生产订单ID统计检验合格数量，仅输出生产订单ID和检验合格数量两列。",
+      "business_definition": "按治理口径计算检验合格数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT qi.production_order_id,SUM(qi.passed_quantity) FROM quality_inspections qi WHERE 1=1 GROUP BY qi.production_order_id"
+    },
+    {
+      "id": "extended-quality-passed-filtered",
+      "domain": "质量",
+      "metric": "检验合格数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按生产订单ID统计检验合格数量，仅输出生产订单ID和检验合格数量两列。",
+      "business_definition": "按治理口径计算检验合格数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT qi.production_order_id,SUM(qi.passed_quantity) FROM quality_inspections qi WHERE 1=1 AND qi.inspection_date>='2026-07-01' AND qi.inspection_date<'2026-10-01' GROUP BY qi.production_order_id"
+    },
+    {
+      "id": "extended-quality-rate-all",
+      "domain": "质量",
+      "metric": "检验合格率",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按生产订单ID统计检验合格率，仅输出生产订单ID和检验合格率两列。",
+      "business_definition": "按治理口径计算检验合格率；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT qi.production_order_id,SUM(qi.passed_quantity)/NULLIF(SUM(qi.inspected_quantity),0) FROM quality_inspections qi WHERE 1=1 GROUP BY qi.production_order_id"
+    },
+    {
+      "id": "extended-quality-rate-filtered",
+      "domain": "质量",
+      "metric": "检验合格率",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按生产订单ID统计检验合格率，仅输出生产订单ID和检验合格率两列。",
+      "business_definition": "按治理口径计算检验合格率；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT qi.production_order_id,SUM(qi.passed_quantity)/NULLIF(SUM(qi.inspected_quantity),0) FROM quality_inspections qi WHERE 1=1 AND qi.inspection_date>='2026-07-01' AND qi.inspection_date<'2026-10-01' GROUP BY qi.production_order_id"
+    },
+    {
+      "id": "extended-quality-defect-rate-all",
+      "domain": "质量",
+      "metric": "检验缺陷率",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按生产订单ID统计检验缺陷率，仅输出生产订单ID和检验缺陷率两列。",
+      "business_definition": "按治理口径计算检验缺陷率；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT qi.production_order_id,SUM(qi.inspected_quantity-qi.passed_quantity)/NULLIF(SUM(qi.inspected_quantity),0) FROM quality_inspections qi WHERE 1=1 GROUP BY qi.production_order_id"
+    },
+    {
+      "id": "extended-quality-defect-rate-filtered",
+      "domain": "质量",
+      "metric": "检验缺陷率",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按生产订单ID统计检验缺陷率，仅输出生产订单ID和检验缺陷率两列。",
+      "business_definition": "按治理口径计算检验缺陷率；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT qi.production_order_id,SUM(qi.inspected_quantity-qi.passed_quantity)/NULLIF(SUM(qi.inspected_quantity),0) FROM quality_inspections qi WHERE 1=1 AND qi.inspection_date>='2026-07-01' AND qi.inspection_date<'2026-10-01' GROUP BY qi.production_order_id"
+    },
+    {
+      "id": "extended-equipment-count-all",
+      "domain": "设备",
+      "metric": "设备数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按设备类型统计设备数量，仅输出设备类型和设备数量两列。",
+      "business_definition": "按治理口径计算设备数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT e.equipment_type,COUNT(DISTINCT e.equipment_id) FROM equipment e WHERE 1=1 GROUP BY e.equipment_type"
+    },
+    {
+      "id": "extended-equipment-count-filtered",
+      "domain": "设备",
+      "metric": "设备数量",
+      "category": "aggregate_metric",
+      "difficulty": "medium",
+      "question": "仅统计设备类型非空的记录，设备数量合计是多少？仅输出一个数值列。",
+      "business_definition": "按治理口径计算设备数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT COUNT(DISTINCT e.equipment_id) FROM equipment e WHERE 1=1 AND e.equipment_type IS NOT NULL"
+    },
+    {
+      "id": "extended-equipment-running-all",
+      "domain": "设备",
+      "metric": "在运设备数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按部门ID统计在运设备数量，仅输出部门ID和在运设备数量两列。",
+      "business_definition": "按治理口径计算在运设备数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT e.department_id,COUNT(DISTINCT e.equipment_id) FROM equipment e WHERE e.equipment_status='running' GROUP BY e.department_id"
+    },
+    {
+      "id": "extended-equipment-running-filtered",
+      "domain": "设备",
+      "metric": "在运设备数量",
+      "category": "aggregate_metric",
+      "difficulty": "medium",
+      "question": "仅统计部门ID非空的记录，在运设备数量合计是多少？仅输出一个数值列。",
+      "business_definition": "按治理口径计算在运设备数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT COUNT(DISTINCT e.equipment_id) FROM equipment e WHERE e.equipment_status='running' AND e.department_id IS NOT NULL"
+    },
+    {
+      "id": "extended-maintenance-count-all",
+      "domain": "设备",
+      "metric": "设备维护次数",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按设备ID统计设备维护次数，仅输出设备ID和设备维护次数两列。",
+      "business_definition": "按治理口径计算设备维护次数；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT em.equipment_id,COUNT(DISTINCT em.maintenance_id) FROM equipment_maintenance em WHERE 1=1 GROUP BY em.equipment_id"
+    },
+    {
+      "id": "extended-maintenance-count-filtered",
+      "domain": "设备",
+      "metric": "设备维护次数",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按设备ID统计设备维护次数，仅输出设备ID和设备维护次数两列。",
+      "business_definition": "按治理口径计算设备维护次数；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT em.equipment_id,COUNT(DISTINCT em.maintenance_id) FROM equipment_maintenance em WHERE 1=1 AND em.maintenance_date>='2026-07-01' AND em.maintenance_date<'2026-10-01' GROUP BY em.equipment_id"
+    },
+    {
+      "id": "extended-maintenance-cost-all",
+      "domain": "设备",
+      "metric": "设备维护成本",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按设备ID统计设备维护成本，仅输出设备ID和设备维护成本两列。",
+      "business_definition": "按治理口径计算设备维护成本；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT em.equipment_id,SUM(em.maintenance_cost) FROM equipment_maintenance em WHERE 1=1 GROUP BY em.equipment_id"
+    },
+    {
+      "id": "extended-maintenance-cost-filtered",
+      "domain": "设备",
+      "metric": "设备维护成本",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按设备ID统计设备维护成本，仅输出设备ID和设备维护成本两列。",
+      "business_definition": "按治理口径计算设备维护成本；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT em.equipment_id,SUM(em.maintenance_cost) FROM equipment_maintenance em WHERE 1=1 AND em.maintenance_date>='2026-07-01' AND em.maintenance_date<'2026-10-01' GROUP BY em.equipment_id"
+    },
+    {
+      "id": "extended-maintenance-down-all",
+      "domain": "设备",
+      "metric": "设备停机时长",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按设备ID统计设备停机时长，仅输出设备ID和设备停机时长两列。",
+      "business_definition": "按治理口径计算设备停机时长；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT em.equipment_id,SUM(em.downtime_hours) FROM equipment_maintenance em WHERE 1=1 GROUP BY em.equipment_id"
+    },
+    {
+      "id": "extended-maintenance-down-filtered",
+      "domain": "设备",
+      "metric": "设备停机时长",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按设备ID统计设备停机时长，仅输出设备ID和设备停机时长两列。",
+      "business_definition": "按治理口径计算设备停机时长；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT em.equipment_id,SUM(em.downtime_hours) FROM equipment_maintenance em WHERE 1=1 AND em.maintenance_date>='2026-07-01' AND em.maintenance_date<'2026-10-01' GROUP BY em.equipment_id"
+    },
+    {
+      "id": "extended-shipment-count-all",
+      "domain": "物流",
+      "metric": "发运单数",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按仓库ID统计发运单数，仅输出仓库ID和发运单数两列。",
+      "business_definition": "按治理口径计算发运单数；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT sh.warehouse_id,COUNT(DISTINCT sh.shipment_id) FROM shipments sh WHERE 1=1 GROUP BY sh.warehouse_id"
+    },
+    {
+      "id": "extended-shipment-count-filtered",
+      "domain": "物流",
+      "metric": "发运单数",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按仓库ID统计发运单数，仅输出仓库ID和发运单数两列。",
+      "business_definition": "按治理口径计算发运单数；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT sh.warehouse_id,COUNT(DISTINCT sh.shipment_id) FROM shipments sh WHERE 1=1 AND sh.shipment_date>='2026-07-01' AND sh.shipment_date<'2026-10-01' GROUP BY sh.warehouse_id"
+    },
+    {
+      "id": "extended-shipment-freight-all",
+      "domain": "物流",
+      "metric": "运费",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按承运商名称统计运费，仅输出承运商名称和运费两列。",
+      "business_definition": "按治理口径计算运费；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT sh.carrier_name,SUM(sh.freight_cost) FROM shipments sh WHERE 1=1 GROUP BY sh.carrier_name"
+    },
+    {
+      "id": "extended-shipment-freight-filtered",
+      "domain": "物流",
+      "metric": "运费",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按承运商名称统计运费，仅输出承运商名称和运费两列。",
+      "business_definition": "按治理口径计算运费；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT sh.carrier_name,SUM(sh.freight_cost) FROM shipments sh WHERE 1=1 AND sh.shipment_date>='2026-07-01' AND sh.shipment_date<'2026-10-01' GROUP BY sh.carrier_name"
+    },
+    {
+      "id": "extended-shipment-quantity-all",
+      "domain": "物流",
+      "metric": "发运数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按产品ID统计发运数量，仅输出产品ID和发运数量两列。",
+      "business_definition": "按治理口径计算发运数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT soi.product_id,SUM(si.shipped_quantity) FROM shipment_items si JOIN shipments sh ON si.shipment_id=sh.shipment_id JOIN sales_order_items soi ON si.sales_order_item_id=soi.sales_order_item_id WHERE 1=1 GROUP BY soi.product_id"
+    },
+    {
+      "id": "extended-shipment-quantity-filtered",
+      "domain": "物流",
+      "metric": "发运数量",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按产品ID统计发运数量，仅输出产品ID和发运数量两列。",
+      "business_definition": "按治理口径计算发运数量；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT soi.product_id,SUM(si.shipped_quantity) FROM shipment_items si JOIN shipments sh ON si.shipment_id=sh.shipment_id JOIN sales_order_items soi ON si.sales_order_item_id=soi.sales_order_item_id WHERE 1=1 AND sh.shipment_date>='2026-07-01' AND sh.shipment_date<'2026-10-01' GROUP BY soi.product_id"
+    },
+    {
+      "id": "extended-payment-customer-all",
+      "domain": "回款",
+      "metric": "客户回款金额",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按币种统计客户回款金额，仅输出币种和客户回款金额两列。",
+      "business_definition": "按治理口径计算客户回款金额；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT cp.currency,SUM(cp.payment_amount) FROM customer_payments cp WHERE cp.payment_status IN ('received','partial') GROUP BY cp.currency"
+    },
+    {
+      "id": "extended-payment-customer-filtered",
+      "domain": "回款",
+      "metric": "客户回款金额",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按币种统计客户回款金额，仅输出币种和客户回款金额两列。",
+      "business_definition": "按治理口径计算客户回款金额；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT cp.currency,SUM(cp.payment_amount) FROM customer_payments cp WHERE cp.payment_status IN ('received','partial') AND cp.payment_date>='2026-07-01' AND cp.payment_date<'2026-10-01' GROUP BY cp.currency"
+    },
+    {
+      "id": "extended-payment-supplier-all",
+      "domain": "付款",
+      "metric": "供应商付款金额",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按币种统计供应商付款金额，仅输出币种和供应商付款金额两列。",
+      "business_definition": "按治理口径计算供应商付款金额；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT sp.currency,SUM(sp.payment_amount) FROM supplier_payments sp WHERE sp.payment_status IN ('paid','partial') GROUP BY sp.currency"
+    },
+    {
+      "id": "extended-payment-supplier-filtered",
+      "domain": "付款",
+      "metric": "供应商付款金额",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年第三季度按币种统计供应商付款金额，仅输出币种和供应商付款金额两列。",
+      "business_definition": "按治理口径计算供应商付款金额；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT sp.currency,SUM(sp.payment_amount) FROM supplier_payments sp WHERE sp.payment_status IN ('paid','partial') AND sp.payment_date>='2026-07-01' AND sp.payment_date<'2026-10-01' GROUP BY sp.currency"
+    },
+    {
+      "id": "extended-budget-amount-all",
+      "domain": "预算",
+      "metric": "预算金额",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年按成本中心ID统计预算金额，仅输出成本中心ID和预算金额两列。",
+      "business_definition": "按治理口径计算预算金额；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT b.cost_center_id,SUM(b.budget_amount) FROM budgets b WHERE b.budget_year=2026 GROUP BY b.cost_center_id"
+    },
+    {
+      "id": "extended-budget-amount-filtered",
+      "domain": "预算",
+      "metric": "预算金额",
+      "category": "aggregate_metric",
+      "difficulty": "medium",
+      "question": "仅统计成本中心ID非空的记录，2026年预算金额合计是多少？仅输出一个数值列。",
+      "business_definition": "按治理口径计算预算金额；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT SUM(b.budget_amount) FROM budgets b WHERE b.budget_year=2026 AND b.cost_center_id IS NOT NULL"
+    },
+    {
+      "id": "extended-budget-actual-all",
+      "domain": "预算",
+      "metric": "实际发生金额",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年按成本中心ID统计实际发生金额，仅输出成本中心ID和实际发生金额两列。",
+      "business_definition": "按治理口径计算实际发生金额；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT b.cost_center_id,SUM(b.actual_amount) FROM budgets b WHERE b.budget_year=2026 GROUP BY b.cost_center_id"
+    },
+    {
+      "id": "extended-budget-actual-filtered",
+      "domain": "预算",
+      "metric": "实际发生金额",
+      "category": "aggregate_metric",
+      "difficulty": "medium",
+      "question": "仅统计成本中心ID非空的记录，2026年实际发生金额合计是多少？仅输出一个数值列。",
+      "business_definition": "按治理口径计算实际发生金额；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT SUM(b.actual_amount) FROM budgets b WHERE b.budget_year=2026 AND b.cost_center_id IS NOT NULL"
+    },
+    {
+      "id": "extended-budget-rate-all",
+      "domain": "预算",
+      "metric": "预算执行率",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "2026年按成本中心ID统计预算执行率，仅输出成本中心ID和预算执行率两列。",
+      "business_definition": "按治理口径计算预算执行率；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT b.cost_center_id,SUM(b.actual_amount)/NULLIF(SUM(b.budget_amount),0) FROM budgets b WHERE b.budget_year=2026 GROUP BY b.cost_center_id"
+    },
+    {
+      "id": "extended-budget-rate-filtered",
+      "domain": "预算",
+      "metric": "预算执行率",
+      "category": "aggregate_metric",
+      "difficulty": "medium",
+      "question": "仅统计成本中心ID非空的记录，2026年预算执行率合计是多少？仅输出一个数值列。",
+      "business_definition": "按治理口径计算预算执行率；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT SUM(b.actual_amount)/NULLIF(SUM(b.budget_amount),0) FROM budgets b WHERE b.budget_year=2026 AND b.cost_center_id IS NOT NULL"
+    },
+    {
+      "id": "extended-employee-count-all",
+      "domain": "人力",
+      "metric": "员工人数",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按部门ID统计员工人数，仅输出部门ID和员工人数两列。",
+      "business_definition": "按治理口径计算员工人数；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT e.department_id,COUNT(DISTINCT e.employee_id) FROM dim_employees e WHERE 1=1 GROUP BY e.department_id"
+    },
+    {
+      "id": "extended-employee-count-filtered",
+      "domain": "人力",
+      "metric": "员工人数",
+      "category": "aggregate_metric",
+      "difficulty": "medium",
+      "question": "仅统计部门ID非空的记录，员工人数合计是多少？仅输出一个数值列。",
+      "business_definition": "按治理口径计算员工人数；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT COUNT(DISTINCT e.employee_id) FROM dim_employees e WHERE 1=1 AND e.department_id IS NOT NULL"
+    },
+    {
+      "id": "extended-employee-active-all",
+      "domain": "人力",
+      "metric": "在职员工数",
+      "category": "grouped_metric",
+      "difficulty": "medium",
+      "question": "按部门ID统计在职员工数，仅输出部门ID和在职员工数两列。",
+      "business_definition": "按治理口径计算在职员工数；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT e.department_id,COUNT(DISTINCT e.employee_id) FROM dim_employees e WHERE e.employee_status='active' GROUP BY e.department_id"
+    },
+    {
+      "id": "extended-employee-active-filtered",
+      "domain": "人力",
+      "metric": "在职员工数",
+      "category": "aggregate_metric",
+      "difficulty": "medium",
+      "question": "仅统计部门ID非空的记录，在职员工数合计是多少？仅输出一个数值列。",
+      "business_definition": "按治理口径计算在职员工数；比例使用0到1小数；禁止扩大粒度。",
+      "expected_sql": "SELECT COUNT(DISTINCT e.employee_id) FROM dim_employees e WHERE e.employee_status='active' AND e.department_id IS NOT NULL"
+    },
+    {
+      "id": "empty-future-sales",
+      "domain": "边界",
+      "category": "empty_result",
+      "difficulty": "simple",
+      "question": "2099年按地区统计完成订单数，只输出地区和订单数两列。",
+      "expected_sql": "SELECT region,COUNT(DISTINCT order_id) FROM sales_orders WHERE order_status='completed' AND order_date>='2099-01-01' AND order_date<'2100-01-01' GROUP BY region"
+    },
+    {
+      "id": "zero-future-count",
+      "domain": "边界",
+      "category": "zero_result",
+      "difficulty": "simple",
+      "question": "2099年完成订单数合计是多少？",
+      "expected_sql": "SELECT COUNT(DISTINCT order_id) FROM sales_orders WHERE order_status='completed' AND order_date>='2099-01-01' AND order_date<'2100-01-01'"
+    },
+    {
+      "id": "coverage-gross-profit",
+      "domain": "完整指标覆盖",
+      "metric": "毛利",
+      "category": "independent_golden",
+      "difficulty": "medium",
+      "question": "2026年第三季度已完成订单的人民币毛利合计是多少？仅输出毛利一列。",
+      "expected_sql": "SELECT SUM(o.net_amount*r.rate_to_cny)-SUM(o.quantity*(p.material_cost+p.labor_cost)) FROM sales_orders o JOIN dim_products p ON o.product_id=p.product_id JOIN exchange_rates r ON o.order_date=r.rate_date AND o.currency=r.currency WHERE o.order_status='completed' AND o.order_date>='2026-07-01' AND o.order_date<'2026-10-01'",
+      "business_definition": "独立标准SQL，检查关联粒度、币种与零分母；不从模型输出生成答案。"
+    },
+    {
+      "id": "coverage-gross-margin",
+      "domain": "完整指标覆盖",
+      "metric": "毛利率",
+      "category": "independent_golden",
+      "difficulty": "medium",
+      "question": "2026年第三季度已完成订单整体毛利率是多少？用0到1小数，仅输出毛利率一列。",
+      "expected_sql": "SELECT (SUM(o.net_amount*r.rate_to_cny)-SUM(o.quantity*(p.material_cost+p.labor_cost)))/NULLIF(SUM(o.net_amount*r.rate_to_cny),0) FROM sales_orders o JOIN dim_products p ON o.product_id=p.product_id JOIN exchange_rates r ON o.order_date=r.rate_date AND o.currency=r.currency WHERE o.order_status='completed' AND o.order_date>='2026-07-01' AND o.order_date<'2026-10-01'",
+      "business_definition": "独立标准SQL，检查关联粒度、币种与零分母；不从模型输出生成答案。"
+    },
+    {
+      "id": "coverage-expenses",
+      "domain": "完整指标覆盖",
+      "metric": "期间费用",
+      "category": "independent_golden",
+      "difficulty": "medium",
+      "question": "2026年第三季度期间费用合计是多少？仅输出期间费用一列。",
+      "expected_sql": "SELECT SUM(f.rd_expense+f.selling_expense+f.admin_expense+f.finance_expense) FROM finance_expenses f WHERE f.expense_date>='2026-07-01' AND f.expense_date<'2026-10-01'",
+      "business_definition": "独立标准SQL，检查关联粒度、币种与零分母；不从模型输出生成答案。"
+    },
+    {
+      "id": "coverage-profit",
+      "domain": "完整指标覆盖",
+      "metric": "利润",
+      "category": "independent_golden",
+      "difficulty": "medium",
+      "question": "2026年第三季度净利润合计是多少？口径为完成订单人民币毛利减同期期间费用，仅输出净利润一列。",
+      "expected_sql": "WITH s AS (SELECT SUM(o.net_amount*r.rate_to_cny) AS rev,SUM(o.quantity*(p.material_cost+p.labor_cost)) AS cost FROM sales_orders o JOIN dim_products p ON o.product_id=p.product_id JOIN exchange_rates r ON o.order_date=r.rate_date AND o.currency=r.currency WHERE o.order_status='completed' AND o.order_date>='2026-07-01' AND o.order_date<'2026-10-01'), f AS (SELECT SUM(f.rd_expense+f.selling_expense+f.admin_expense+f.finance_expense) AS expense FROM finance_expenses f WHERE f.expense_date>='2026-07-01' AND f.expense_date<'2026-10-01') SELECT s.rev-s.cost-f.expense FROM s CROSS JOIN f",
+      "business_definition": "独立标准SQL，检查关联粒度、币种与零分母；不从模型输出生成答案。"
+    },
+    {
+      "id": "coverage-profit-margin",
+      "domain": "完整指标覆盖",
+      "metric": "利润率",
+      "category": "independent_golden",
+      "difficulty": "medium",
+      "question": "2026年第三季度净利润率是多少？净利润为完成订单人民币毛利减同期期间费用，比例为0到1小数，仅输出净利润率一列。",
+      "expected_sql": "WITH s AS (SELECT SUM(o.net_amount*r.rate_to_cny) AS rev,SUM(o.quantity*(p.material_cost+p.labor_cost)) AS cost FROM sales_orders o JOIN dim_products p ON o.product_id=p.product_id JOIN exchange_rates r ON o.order_date=r.rate_date AND o.currency=r.currency WHERE o.order_status='completed' AND o.order_date>='2026-07-01' AND o.order_date<'2026-10-01'), f AS (SELECT SUM(f.rd_expense+f.selling_expense+f.admin_expense+f.finance_expense) AS expense FROM finance_expenses f WHERE f.expense_date>='2026-07-01' AND f.expense_date<'2026-10-01') SELECT (s.rev-s.cost-f.expense)/NULLIF(s.rev,0) FROM s CROSS JOIN f",
+      "business_definition": "独立标准SQL，检查关联粒度、币种与零分母；不从模型输出生成答案。"
+    },
+    {
+      "id": "coverage-purchase-unit",
+      "domain": "完整指标覆盖",
+      "metric": "平均采购单价",
+      "category": "independent_golden",
+      "difficulty": "medium",
+      "question": "按采购订单币种统计平均采购单价，明细金额除以明细数量，仅输出币种和平均采购单价两列。",
+      "expected_sql": "SELECT po.currency,SUM(i.quantity*i.unit_cost)/NULLIF(SUM(i.quantity),0) FROM purchase_order_items i JOIN purchase_orders po ON i.purchase_order_id=po.purchase_order_id GROUP BY po.currency",
+      "business_definition": "独立标准SQL，检查关联粒度、币种与零分母；不从模型输出生成答案。"
+    },
+    {
+      "id": "coverage-production-rate",
+      "domain": "完整指标覆盖",
+      "metric": "生产完成率",
+      "category": "independent_golden",
+      "difficulty": "medium",
+      "question": "按产品ID统计整体生产完成率。先按生产单汇总全部实际产出再关联计划，避免重复计划量，仅输出产品ID和生产完成率两列。",
+      "expected_sql": "WITH outputs AS (SELECT production_order_id,SUM(good_quantity+defect_quantity) AS qty FROM production_outputs GROUP BY production_order_id) SELECT mo.product_id,SUM(COALESCE(x.qty,0))/NULLIF(SUM(mo.planned_quantity),0) FROM production_orders mo LEFT JOIN outputs x ON x.production_order_id=mo.production_order_id GROUP BY mo.product_id",
+      "business_definition": "独立标准SQL，检查关联粒度、币种与零分母；不从模型输出生成答案。"
+    },
+    {
+      "id": "coverage-customer-payment-rate",
+      "domain": "完整指标覆盖",
+      "metric": "客户回款率",
+      "category": "independent_golden",
+      "difficulty": "medium",
+      "question": "按币种统计客户回款率，只统计有已收或部分回款的已完成销售订单；先把同单同币种回款汇总再关联，分母每个对应订单只计一次。仅输出币种和客户回款率两列。",
+      "expected_sql": "WITH payments AS (SELECT order_id,currency,SUM(payment_amount) AS paid FROM customer_payments WHERE payment_status IN ('received','partial') GROUP BY order_id,currency) SELECT o.currency,SUM(cp.paid)/NULLIF(SUM(o.net_amount),0) FROM sales_orders o JOIN payments cp ON o.order_id=cp.order_id AND o.currency=cp.currency WHERE o.order_status='completed' GROUP BY o.currency",
+      "business_definition": "独立标准SQL，检查关联粒度、币种与零分母；不从模型输出生成答案。"
+    },
+    {
+      "id": "coverage-supplier-payment-rate",
+      "domain": "完整指标覆盖",
+      "metric": "采购付款率",
+      "category": "independent_golden",
+      "difficulty": "medium",
+      "question": "按币种统计采购付款率，只统计有已付或部分付款的采购订单；先把同单同币种付款汇总再关联，分母每个对应采购订单只计一次。仅输出币种和采购付款率两列。",
+      "expected_sql": "WITH payments AS (SELECT purchase_order_id,currency,SUM(payment_amount) AS paid FROM supplier_payments WHERE payment_status IN ('paid','partial') GROUP BY purchase_order_id,currency) SELECT po.currency,SUM(sp.paid)/NULLIF(SUM(po.total_amount),0) FROM purchase_orders po JOIN payments sp ON po.purchase_order_id=sp.purchase_order_id AND po.currency=sp.currency GROUP BY po.currency",
+      "business_definition": "独立标准SQL，检查关联粒度、币种与零分母；不从模型输出生成答案。"
+    },
+    {
+      "id": "coverage-budget-gap",
+      "domain": "完整指标覆盖",
+      "metric": "预算差异",
+      "category": "independent_golden",
+      "difficulty": "medium",
+      "question": "2026年按成本中心ID统计预算差异，正数为结余，负数为超支。仅输出成本中心ID和预算差异两列。",
+      "expected_sql": "SELECT cost_center_id,SUM(budget_amount)-SUM(actual_amount) FROM budgets WHERE budget_year=2026 GROUP BY cost_center_id",
+      "business_definition": "独立标准SQL，检查关联粒度、币种与零分母；不从模型输出生成答案。"
+    },
+    {
+      "id": "coverage-warehouse-capacity",
+      "domain": "完整指标覆盖",
+      "metric": "仓库容量",
+      "category": "independent_golden",
+      "difficulty": "medium",
+      "question": "按地区统计启用仓库的仓库容量合计。仅输出地区和仓库容量两列。",
+      "expected_sql": "SELECT region,SUM(capacity_mwh) FROM dim_warehouses WHERE warehouse_status='active' GROUP BY region",
+      "business_definition": "独立标准SQL，检查关联粒度、币种与零分母；不从模型输出生成答案。"
+    },
+    {
+      "id": "coverage-annual-budget",
+      "domain": "完整指标覆盖",
+      "metric": "成本中心年度预算",
+      "category": "independent_golden",
+      "difficulty": "medium",
+      "question": "按部门ID统计成本中心年度预算合计。仅输出部门ID和成本中心年度预算两列。",
+      "expected_sql": "SELECT department_id,SUM(annual_budget) FROM dim_cost_centers GROUP BY department_id",
+      "business_definition": "独立标准SQL，检查关联粒度、币种与零分母；不从模型输出生成答案。"
+    },
+    {
+      "id": "coverage-channels",
+      "domain": "完整指标覆盖",
+      "metric": "销售渠道数",
+      "category": "independent_golden",
+      "difficulty": "medium",
+      "question": "销售渠道数总计是多少？只输出一个数值列。",
+      "expected_sql": "SELECT COUNT(DISTINCT channel_id) FROM dim_sales_channels",
+      "business_definition": "独立标准SQL，检查关联粒度、币种与零分母；不从模型输出生成答案。"
+    },
+    {
+      "id": "coverage-workdays",
+      "domain": "完整指标覆盖",
+      "metric": "工作日数",
+      "category": "independent_golden",
+      "difficulty": "medium",
+      "question": "2026年第三季度工作日数是多少？只输出一个数值列。",
+      "expected_sql": "SELECT COUNT(DISTINCT calendar_date) FROM dim_calendar WHERE is_workday=TRUE AND calendar_date>='2026-07-01' AND calendar_date<'2026-10-01'",
+      "business_definition": "独立标准SQL，检查关联粒度、币种与零分母；不从模型输出生成答案。"
+    },
+    {
+      "id": "coverage-customers",
+      "domain": "完整指标覆盖",
+      "metric": "客户总数",
+      "category": "independent_golden",
+      "difficulty": "medium",
+      "question": "按国家统计客户总数，包含未成交客户。仅输出国家和客户总数两列。",
+      "expected_sql": "SELECT country,COUNT(DISTINCT customer_id) FROM dim_customers GROUP BY country",
+      "business_definition": "独立标准SQL，检查关联粒度、币种与零分母；不从模型输出生成答案。"
+    }
+  ],
+  "behaviors": [
+    {
+      "id": "conversation-1",
+      "domain": "意图路由",
+      "kind": "non_query",
+      "question": "你好"
+    },
+    {
+      "id": "conversation-2",
+      "domain": "意图路由",
+      "kind": "non_query",
+      "question": "谢谢你"
+    },
+    {
+      "id": "conversation-3",
+      "domain": "意图路由",
+      "kind": "non_query",
+      "question": "你是谁"
+    },
+    {
+      "id": "conversation-4",
+      "domain": "意图路由",
+      "kind": "non_query",
+      "question": "怎么用"
+    },
+    {
+      "id": "conversation-5",
+      "domain": "意图路由",
+      "kind": "non_query",
+      "question": "再见"
+    },
+    {
+      "id": "conversation-6",
+      "domain": "意图路由",
+      "kind": "non_query",
+      "question": "早上好"
+    },
+    {
+      "id": "conversation-7",
+      "domain": "意图路由",
+      "kind": "non_query",
+      "question": "hello"
+    },
+    {
+      "id": "conversation-8",
+      "domain": "意图路由",
+      "kind": "non_query",
+      "question": "在吗"
+    },
+    {
+      "id": "clarification-1",
+      "domain": "主动澄清",
+      "kind": "clarification",
+      "question": "最近利润怎么样？",
+      "question_ids": [
+        "metric",
+        "time"
+      ]
+    },
+    {
+      "id": "clarification-2",
+      "domain": "主动澄清",
+      "kind": "clarification",
+      "question": "最近收入是多少？",
+      "question_ids": [
+        "time"
+      ]
+    },
+    {
+      "id": "clarification-3",
+      "domain": "主动澄清",
+      "kind": "clarification",
+      "question": "利润是多少？",
+      "question_ids": [
+        "metric"
+      ]
+    },
+    {
+      "id": "clarification-4",
+      "domain": "主动澄清",
+      "kind": "clarification",
+      "question": "哪些产品表现最好？",
+      "question_ids": [
+        "ranking"
+      ]
+    },
+    {
+      "id": "followup-1",
+      "domain": "多轮追问",
+      "kind": "followup",
+      "question": "只看欧洲",
+      "context": [
+        "2026年按地区统计完成订单数，只输出地区和订单数两列。"
+      ],
+      "expected_sql": "SELECT region,COUNT(DISTINCT order_id) FROM sales_orders WHERE order_status='completed' AND order_date>='2026-01-01' AND order_date<'2027-01-01' AND region='欧洲' GROUP BY region"
+    },
+    {
+      "id": "followup-2",
+      "domain": "多轮追问",
+      "kind": "followup",
+      "question": "只看亚太",
+      "context": [
+        "2026年按地区统计完成订单数，只输出地区和订单数两列。"
+      ],
+      "expected_sql": "SELECT region,COUNT(DISTINCT order_id) FROM sales_orders WHERE order_status='completed' AND order_date>='2026-01-01' AND order_date<'2027-01-01' AND region='亚太' GROUP BY region"
+    },
+    {
+      "id": "followup-3",
+      "domain": "多轮追问",
+      "kind": "followup",
+      "question": "改成2025年",
+      "context": [
+        "2026年按地区统计完成订单数，只输出地区和订单数两列。"
+      ],
+      "expected_sql": "SELECT region,COUNT(DISTINCT order_id) FROM sales_orders WHERE order_status='completed' AND order_date>='2025-01-01' AND order_date<'2026-01-01' GROUP BY region"
+    },
+    {
+      "id": "followup-4",
+      "domain": "多轮追问",
+      "kind": "followup",
+      "question": "改成2026年第三季度",
+      "context": [
+        "2026年按地区统计完成订单数，只输出地区和订单数两列。"
+      ],
+      "expected_sql": "SELECT region,COUNT(DISTINCT order_id) FROM sales_orders WHERE order_status='completed' AND order_date>='2026-07-01' AND order_date<'2026-10-01' GROUP BY region"
+    }
+  ]
+}

@@ -33,7 +33,7 @@ def validate_output(step: PlanStep, columns: list[str], rows: list[list[Any]]) -
                 if expected.data_type == "integer" and Decimal(str(value)) % 1:
                     raise ValueError("整数字段包含非整数")
             elif expected.data_type == "string" and not isinstance(value, str):
-                raise ValueError(f"输出字段类型与契约不一致：{expected.name}")
+                raise ValueError(f"输出字段类型与契约不一致：{expected.name}，要求 string，实际 {type(value).__name__}；请核对源字段类型与计划，不得重复原SQL")
             elif expected.data_type in {"date", "datetime"}:
                 if not isinstance(value, (date, datetime)):
                     raise ValueError(f"输出字段类型与契约不一致：{expected.name}")

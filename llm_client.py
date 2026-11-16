@@ -8,6 +8,10 @@ LLM 客户端模块
 为 SSE 推送提供底层能力。保留原有 generate_sql 不动，确保向后兼容。
 """
 
+from threading import Lock
+
+_USAGE_LOCK = Lock()
+
 import re
 from typing import Any, Generator
 
@@ -22,7 +26,9 @@ from chatbi.application.progress import checkpoint, remaining_timeout
 class LLMClient:
     """LLM API 客户端"""
 
-    def __init__(self, settings: Settings | None = None, client: Any | None = None):
+    def __init__(self, settings: Settings | None = None, client: Any | None = None,
+                 *, role: str = "sql", usage: dict | None = None,
+                 usage_by_role: dict | None = None):
         self.settings = settings or get_settings()
         if client is None:
             if self.settings.openai_api_key is None:
@@ -34,11 +40,25 @@ class LLMClient:
                 max_retries=0,
             )
         self.client = client
-        self.model = self.settings.llm_model
+        self.model = self.settings.model_for(role)
+        self.role = role
         self.embedding_model = self.settings.embedding_model
         self.temperature = self.settings.llm_temperature
         self.max_tokens = self.settings.llm_max_tokens
-        self.usage = {"calls": 0, "reported_calls": 0, "prompt_tokens": 0, "completion_tokens": 0}
+        self.usage = usage if usage is not None else self.empty_usage()
+        self.usage_by_role = usage_by_role if usage_by_role is not None else {}
+        self.usage_by_role.setdefault(role, self.empty_usage())
+
+    @staticmethod
+    def empty_usage() -> dict[str, int]:
+        return {"calls": 0, "reported_calls": 0, "prompt_tokens": 0, "completion_tokens": 0}
+
+    def request_options(self) -> dict[str, Any]:
+        # This extension is opt-in: ordinary OpenAI-compatible providers do not
+        # have to accept a vendor-specific thinking parameter.
+        if self.settings.llm_thinking == "auto":
+            return {}
+        return {"extra_body": {"thinking": {"type": self.settings.llm_thinking}}}
 
     def generate_sql(self, system_msg: str, prompt: str) -> str:
         """
@@ -85,6 +105,9 @@ class LLMClient:
         """
         try:
             checkpoint()
+            with _USAGE_LOCK:
+                for counts in (self.usage, self.usage_by_role[self.role]):
+                    counts["calls"] += 1
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -94,14 +117,16 @@ class LLMClient:
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
                 timeout=remaining_timeout(self.settings.llm_timeout_seconds),
+                **self.request_options(),
             )
             checkpoint()
-            self.usage["calls"] += 1
             usage = getattr(response, "usage", None)
-            if usage is not None:
-                self.usage["reported_calls"] += 1
-                self.usage["prompt_tokens"] += int(getattr(usage, "prompt_tokens", 0) or 0)
-                self.usage["completion_tokens"] += int(getattr(usage, "completion_tokens", 0) or 0)
+            with _USAGE_LOCK:
+                for counts in (self.usage, self.usage_by_role[self.role]):
+                    if usage is not None:
+                        counts["reported_calls"] += 1
+                        counts["prompt_tokens"] += int(getattr(usage, "prompt_tokens", 0) or 0)
+                        counts["completion_tokens"] += int(getattr(usage, "completion_tokens", 0) or 0)
             content = response.choices[0].message.content
             return content.strip() if content else ""
         except (APITimeoutError, APIConnectionError, OpenAIError) as exc:
@@ -130,6 +155,7 @@ class LLMClient:
             temperature=self.temperature,
             max_tokens=self.max_tokens,
             stream=True,
+            **self.request_options(),
         )
 
         for chunk in stream:

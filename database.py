@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from queue import Empty, LifoQueue
+from threading import Lock, local
 from time import perf_counter
 from typing import Any, Callable, cast
 
@@ -51,25 +52,33 @@ class DatabaseConnectionPool:
         self.pool_timeout = pool_timeout
         self._idle_connections: LifoQueue[Any] = LifoQueue(maxsize=self.pool_size)
         self._total_connections = 0
+        self._count_lock = Lock()
+
+    def _new_connection(self):
+        try:
+            return self.connection_factory()
+        except BaseException:
+            with self._count_lock:
+                self._total_connections -= 1
+            raise
 
     def acquire(self) -> Any:
         try:
             conn = self._idle_connections.get_nowait()
         except Empty:
-            if self._total_connections < self.pool_size + self.max_overflow:
-                conn = self.connection_factory()
-                self._total_connections += 1
-                return conn
+            with self._count_lock:
+                create = self._total_connections < self.pool_size + self.max_overflow
+                if create:
+                    self._total_connections += 1
+            if create:
+                return self._new_connection()
             conn = self._idle_connections.get(timeout=self.pool_timeout)
-
         try:
             conn.ping(reconnect=True)
             return conn
         except Exception:
             self._discard_connection(conn)
-            conn = self.connection_factory()
-            self._total_connections += 1
-            return conn
+            return self.acquire()
 
     def release(self, conn: Any) -> None:
         try:
@@ -89,7 +98,8 @@ class DatabaseConnectionPool:
         try:
             conn.close()
         finally:
-            self._total_connections = max(self._total_connections - 1, 0)
+            with self._count_lock:
+                self._total_connections = max(self._total_connections - 1, 0)
 
 
 class DatabaseClient:
@@ -117,7 +127,8 @@ class DatabaseClient:
         )
         self.connection_factory = connection_factory
         self.connection_pool = connection_pool
-        self.last_query_info: dict[str, Any] = {}
+        self._query_local = local()
+        self.last_query_info = {}
 
         if self.connection_factory is None and self.connection_pool is None:
             self.connection_pool = DatabaseConnectionPool(
@@ -126,6 +137,14 @@ class DatabaseClient:
                 max_overflow=DB_RUNTIME_CONFIG["max_overflow"],
                 pool_timeout=DB_RUNTIME_CONFIG["pool_timeout"],
             )
+
+    @property
+    def last_query_info(self) -> dict[str, Any]:
+        return getattr(self._query_local, "info", {})
+
+    @last_query_info.setter
+    def last_query_info(self, value):
+        self._query_local.info = value
 
     def execute(
         self,

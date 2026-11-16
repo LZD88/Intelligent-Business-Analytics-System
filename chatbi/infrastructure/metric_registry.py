@@ -8,6 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 import sqlite3
+from chatbi.infrastructure.control_database import connect as connect_control
 from threading import RLock
 from typing import Any, Iterator
 from uuid import uuid4
@@ -62,7 +63,7 @@ class MetricRegistry:
     account needs write permission. Only published, non-retired versions are used.
     """
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, seed: bool = True) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         self.path = path
         self.lock = RLock()
@@ -84,7 +85,7 @@ class MetricRegistry:
                 );
             """)
             # Seed exactly once, not whenever a metric is retired or drafts exist.
-            if not connection.execute("SELECT 1 FROM metrics LIMIT 1").fetchone():
+            if seed and not connection.execute("SELECT 1 FROM metrics LIMIT 1").fetchone():
                 for definition in IndicatorKnowledge().indicators.values():
                     metric_id = uuid4().hex
                     connection.execute("INSERT INTO metrics VALUES (?, ?)", (metric_id, definition["name"]))
@@ -96,7 +97,7 @@ class MetricRegistry:
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
         with self.lock:
-            connection = sqlite3.connect(self.path, timeout=10)
+            connection = connect_control(self.path, timeout=10)
             try:
                 connection.row_factory = sqlite3.Row
                 connection.execute("PRAGMA foreign_keys=ON")
@@ -121,7 +122,7 @@ class MetricRegistry:
             values = sorted(self._active(connection).values(), key=lambda item: item["name"])
             document = {"indicators": values}
             digest = hashlib.sha256(json.dumps(document, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
-            return digest, IndicatorKnowledge.from_document(document)
+            return digest, IndicatorKnowledge.from_document(document, allow_empty=True)
 
     def list_metrics(self) -> list[dict[str, Any]]:
         with self._connection() as connection:

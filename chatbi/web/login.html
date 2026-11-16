@@ -1,0 +1,13 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>登录 · ChatBI</title><link rel="stylesheet" href="/static/styles.css">
+<body class="account-page"><main class="panel account-panel"><p class="eyebrow">CHATBI WORKSPACE</p><h1 id="heading">登录工作台</h1>
+<p id="hint">登录后访问获授权的数据源和个人分析记录。</p>
+<form id="login-form"><label>用户名<input name="username" autocomplete="username" maxlength="80" required></label>
+<label>密码<input name="password" type="password" autocomplete="current-password" maxlength="256" required></label>
+<button class="primary" type="submit">进入工作台</button><p id="login-message" role="alert"></p></form></main>
+<script type="module">
+const state=await(await fetch('/api/v1/auth/status')).json();
+if(!state.enabled||state.user)location.replace('/');
+if(state.needs_setup){document.querySelector('#heading').textContent='创建首个管理员';document.querySelector('#hint').textContent='此操作仅需一次。密码至少12位，请妥善保存。';document.querySelector('[name=password]').minLength=12;}
+document.querySelector('#login-form').addEventListener('submit',async e=>{e.preventDefault();const button=e.target.querySelector('button');button.disabled=true;try{const data=Object.fromEntries(new FormData(e.target));if(state.needs_setup){const setup=await fetch('/api/v1/auth/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(!setup.ok)throw new Error((await setup.json()).message||'初始化失败');state.needs_setup=false;}const r=await fetch('/api/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(!r.ok)throw new Error((await r.json()).message||'登录失败');sessionStorage.removeItem('chatbi-source');location.replace('/');}catch(error){document.querySelector('#login-message').textContent=error.message;}finally{button.disabled=false;}});
+</script></body></html>

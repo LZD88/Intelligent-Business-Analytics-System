@@ -375,6 +375,7 @@ class ChromaSimpleSemanticPipeline:
 
     @staticmethod
     def _build_schema(tables: list[str], fields: list[str], joins: list[str]) -> str:
+        from chatbi.infrastructure.schema_metadata import seed_column_types, typed_fields
         selected_by_table: dict[str, set[str]] = {table: set() for table in tables}
         for value in fields:
             table, field = value.split(".", 1)
@@ -388,7 +389,7 @@ class ChromaSimpleSemanticPipeline:
         for table in tables:
             selected = selected_by_table[table] or set(DEFAULT_SCHEMA[table])
             lines.append(f"表：{table}（{TABLE_DESCRIPTIONS[table]}）")
-            lines.append(f"- 字段：{', '.join(sorted(selected))}")
+            lines.append(f"- 字段：{typed_fields(table, selected, seed_column_types())}")
             for field in sorted(selected):
                 if field in FIELD_TERMS:
                     lines.append(f"  {table}.{field}：{FIELD_TERMS[field]}")

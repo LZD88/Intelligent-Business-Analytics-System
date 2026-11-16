@@ -52,6 +52,8 @@ class ExecutionAgent:
         clarification: str = "",
     ) -> list[StepExecutionResult]:
         del request_id  # request isolation is provided by this call's local state.
+        if self.settings.complex_parallel_workers > 1:
+            return self._parallel(question, plan, schema_text, indicator_knowledge, cached_results, clarification)
         results: list[StepExecutionResult] = []
         by_id: dict[str, StepExecutionResult] = {}
         cached = {item.step_id: item for item in cached_results or []}
@@ -107,6 +109,81 @@ class ExecutionAgent:
                     ))
                 break
         return results
+
+    def _parallel(self, question, plan, schema_text, knowledge, cached_results, clarification):
+        from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED, Future
+        from contextvars import copy_context
+        from threading import Event
+        from chatbi.application.progress import CURRENT, QueryControl, QueryStopped, query_control
+
+        by_id = {item.step_id: item.model_copy(update={"recovery_action": "reused"})
+                 for item in cached_results or [] if item.status is StepStatus.SUCCEEDED}
+        pending = [step for step in plan.steps if step.step_id not in by_id]
+        parent = CURRENT.get()
+        circuit = Event()
+        class BranchCancel:
+            def is_set(self):
+                return circuit.is_set() or (parent is not None and parent.cancel.is_set())
+
+        def blocked(step):
+            return StepExecutionResult(step_id=step.step_id, step_name=step.step_name,
+                depends_on=step.depends_on, importance=step.importance, status=StepStatus.BLOCKED,
+                result="核心任务失败，级联熔断，未继续执行", result_reference=f"{step.step_id}:blocked",
+                recovery_action="circuit_blocked", error_code="circuit_open", error_message="等待核心步骤恢复")
+
+        def run(step, previous):
+            control = QueryControl(BranchCancel(), parent.deadline if parent else float("inf"),
+                parent.emit if parent else lambda *args: None,
+                parent.resume_state if parent else None, parent.options if parent else None)
+            try:
+                with query_control(control):
+                    progress("step_started", step_id=step.step_id, step_name=step.step_name,
+                             message=f"正在执行：{step.step_name}", importance=step.importance)
+                    return self._run_step(question, plan, step, schema_text, knowledge, previous, clarification)
+            except QueryStopped:
+                if circuit.is_set() and not (parent and parent.cancel.is_set()):
+                    return blocked(step)
+                raise
+
+        futures: dict[Future[StepExecutionResult], PlanStep] = {}
+        with ThreadPoolExecutor(max_workers=self.settings.complex_parallel_workers, thread_name_prefix="chatbi-dag") as pool:
+            while pending or futures:
+                checkpoint()
+                for step in list(pending):
+                    if circuit.is_set():
+                        by_id[step.step_id] = blocked(step)
+                        pending.remove(step)
+                    elif all(dep in by_id for dep in step.depends_on):
+                        if any(by_id[dep].status is not StepStatus.SUCCEEDED for dep in step.depends_on):
+                            by_id[step.step_id] = self._skipped(step)
+                            pending.remove(step)
+                        elif len(futures) < self.settings.complex_parallel_workers:
+                            ctx = copy_context()
+                            futures[pool.submit(ctx.run, run, step, dict(by_id))] = step
+                            pending.remove(step)
+                if not futures:
+                    if pending:
+                        raise ValueError("DAG 依赖无法满足")
+                    break
+                done, _ = wait(futures, timeout=.1, return_when=FIRST_COMPLETED)
+                # Process a whole completion batch before scheduling any new work.
+                for future in done:
+                    step = futures.pop(future)
+                    result = future.result()
+                    if result.status is StepStatus.FAILED:
+                        if step.importance == "low":
+                            result = result.model_copy(update={"status": StepStatus.SKIPPED,
+                                "recovery_action": "soft_skip", "result": "辅助节点失败，降级跳过"})
+                        else:
+                            result = result.model_copy(update={"recovery_action": "suspend"})
+                            circuit.set()
+                            progress("circuit_open", step_id=step.step_id, message="核心任务失败，停止调度并协作取消并行分支")
+                    by_id[step.step_id] = result
+                    progress("step_finished", step_id=step.step_id, status=result.status.value,
+                             row_count=result.row_count, message=f"{step.step_name}：" + {
+                                 "succeeded": "执行成功", "failed": "执行失败", "skipped": "降级跳过", "blocked": "熔断阻止"
+                             }.get(result.status.value, "执行结束"))
+        return [by_id[step.step_id] for step in plan.steps]
 
     def _run_step(
         self,

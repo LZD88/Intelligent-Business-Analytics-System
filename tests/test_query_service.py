@@ -80,7 +80,7 @@ def test_successful_pipeline_returns_structured_result() -> None:
     assert "sql_ast_safety" in result.pipeline_stages
     assert "connection_pool_execution" in result.pipeline_stages
     assert result.row_level_applied is False
-    assert set(result.timings_ms) == {"intent", "indicator", "schema", "prompt", "model", "security", "database", "total"}
+    assert set(result.timings_ms) == {"intent", "indicator", "schema", "prompt", "model", "security", "database", "validation_and_repair", "total"}
 
 
 def test_complex_intent_injects_planning_guidance() -> None:
@@ -143,3 +143,15 @@ def test_unknown_errors_are_mapped_to_internal_error() -> None:
         service.query("订单数")
     assert exc.value.code == ErrorCode.INTERNAL_ERROR
     assert "private failure" not in exc.value.public_message
+
+
+@pytest.mark.parametrize("database", [FakeDatabase(QueryExecutionError("sql_syntax", "private")), None])
+def test_post_classification_failures_preserve_routing_provenance(database) -> None:
+    class BrokenLLM(FakeLLM):
+        def generate_sql(self, system_msg, prompt):
+            raise ChatBIError(ErrorCode.MODEL_OUTPUT_INVALID)
+
+    service = make_service(database=database) if database else make_service(llm=BrokenLLM())
+    with pytest.raises(ChatBIError) as exc:
+        service.query("订单数")
+    assert exc.value.details["intent_source"] == "qwen"

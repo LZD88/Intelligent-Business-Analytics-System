@@ -32,7 +32,7 @@ export function renderFeedback(id) {
 }
 
 export class JobClient {
-  constructor({ fetchImpl = fetch, eventSource = (url) => new EventSource(url), onProgress = () => {}, onJob = () => {} } = {}) {
+  constructor({ fetchImpl = fetch, eventSource = (url) => new EventSource(url + ((sessionStorage.getItem("chatbi-source") || "demo") === "demo" ? "" : `${url.includes("?") ? "&" : "?"}source_id=${encodeURIComponent(sessionStorage.getItem("chatbi-source"))}`)), onProgress = () => {}, onJob = () => {} } = {}) {
     this.fetch = fetchImpl; this.eventSource = eventSource; this.onProgress = onProgress; this.onJob = onJob;
     this.id = null; this.stream = null; this.stages = []; this.cursor = 0; this.pollTimer = null;
   }

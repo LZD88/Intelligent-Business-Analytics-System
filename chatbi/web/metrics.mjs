@@ -1,3 +1,7 @@
+if (typeof window !== "undefined") {
+  const { requireSession } = await import("./session.mjs");
+  await requireSession();
+}
 const esc = (value) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 export const STATUS = { draft: "草稿", in_review: "待审核", published: "已发布", retired: "已废弃", rejected: "已驳回" };
 export function renderMetricList(items, query = "", selected = null) {

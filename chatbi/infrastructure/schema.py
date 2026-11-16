@@ -11,6 +11,13 @@ from chatbi.domain.schema import SchemaProvider, SchemaSelection
 from chatbi.domain.security import DEFAULT_SCHEMA
 from chatbi.settings import Settings, get_settings
 from prompt_builder import SCHEMA
+from chatbi.infrastructure.schema_metadata import seed_column_types, typed_fields
+
+
+def type_context(tables):
+    types = seed_column_types()
+    return "字段真实类型：\n" + "\n".join(
+        f"{t}({typed_fields(t, DEFAULT_SCHEMA[t], types)})" for t in tables if t in DEFAULT_SCHEMA)
 
 
 JOIN_HINTS = {
@@ -35,7 +42,7 @@ class SemanticSchemaProvider:
         table_names = tuple(item["table_name"] for item in result.get("tables", []))
         if not table_names or not result.get("fields"):
             raise LookupError("semantic schema retrieval returned no candidates")
-        lines = [result.get("schema_snippet", "").strip()]
+        lines = [result.get("schema_snippet", "").strip(), type_context(table_names)]
         table_set = set(table_names)
         for tables, hint in JOIN_HINTS.items():
             if tables.issubset(table_set):
@@ -46,7 +53,7 @@ class SemanticSchemaProvider:
 class StaticSchemaProvider:
     def select(self, question: str) -> SchemaSelection:
         return SchemaSelection(
-            SCHEMA.strip(),
+            SCHEMA.strip() + "\n" + type_context(DEFAULT_SCHEMA),
             "fallback",
             tuple(DEFAULT_SCHEMA),
         )

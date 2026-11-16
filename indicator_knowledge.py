@@ -84,14 +84,14 @@ class IndicatorKnowledge:
         self._load_document(document)
 
     @classmethod
-    def from_document(cls, document: dict[str, Any]) -> "IndicatorKnowledge":
+    def from_document(cls, document: dict[str, Any], *, allow_empty: bool = False) -> "IndicatorKnowledge":
         instance = cls.__new__(cls)
-        instance._load_document(document)
+        instance._load_document(document, allow_empty=allow_empty)
         return instance
 
-    def _load_document(self, document: Any) -> None:
+    def _load_document(self, document: Any, *, allow_empty: bool = False) -> None:
         items = document.get("indicators") if isinstance(document, dict) else None
-        if not isinstance(items, list) or not items:
+        if not isinstance(items, list) or (not items and not allow_empty):
             raise ValueError("indicator document must contain a non-empty indicators list")
 
         definitions = [IndicatorDefinition.from_mapping(item) for item in items]

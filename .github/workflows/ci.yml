@@ -8,6 +8,47 @@ concurrency:
   group: code-quality-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  central-control:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: chatbi_ci
+          POSTGRES_PASSWORD: isolated-ci-only
+          POSTGRES_DB: chatbi_control
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U chatbi_ci -d chatbi_control"
+          --health-interval=3s --health-timeout=3s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: Real PostgreSQL identity, catalog and shared lease checks
+        env:
+          CHATBI_CONTROL_PG_URL: postgresql://chatbi_ci:isolated-ci-only@127.0.0.1:5432/chatbi_control
+        run: uv run pytest tests/test_central_control.py -q --junitxml=reports/central-control.xml
+      - name: Reject skipped central-store verification
+        run: >-
+          uv run python -c "import xml.etree.ElementTree as E;
+          r=E.parse('reports/central-control.xml').getroot();
+          assert not list(r.iter('skipped'))"
+      - name: Restore an isolated central-store backup
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+          CHATBI_BACKUP_SOURCE_URL: postgresql://chatbi_ci:isolated-ci-only@127.0.0.1:5432/chatbi_control
+          CHATBI_BACKUP_RESTORED_URL: postgresql://chatbi_ci:isolated-ci-only@127.0.0.1:5432/chatbi_restore
+        run: |
+          docker exec "$PG_CONTAINER" pg_dump -U chatbi_ci -d chatbi_control > /tmp/chatbi-control.sql
+          docker exec "$PG_CONTAINER" createdb -U chatbi_ci chatbi_restore
+          docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U chatbi_ci -d chatbi_restore < /tmp/chatbi-control.sql
+          uv run python scripts/check_control_restore.py
   windows-launcher:
     runs-on: windows-latest
     timeout-minutes: 15

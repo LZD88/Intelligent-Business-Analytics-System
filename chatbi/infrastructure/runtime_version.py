@@ -8,7 +8,7 @@ def source_version() -> str:
     digest = hashlib.sha256()
     paths = sorted([*root.glob("chatbi/**/*.py"), *root.glob("chatbi/web/*.mjs"),
                     *root.glob("chatbi/web/*.html"), *root.glob("chatbi/web/*.css"),
-                    *root.glob("*.py")])
+                    *root.glob("*.py"), root / "scripts/evaluate_release.py"])
     for path in paths:
         digest.update(path.relative_to(root).as_posix().encode())
         digest.update(path.read_bytes())

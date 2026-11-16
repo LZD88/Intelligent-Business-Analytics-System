@@ -275,6 +275,7 @@ class AnalysisReport(StrictModel):
     source: Literal["summary_agent", "template_fallback"]
     fallback_reason: str | None = None
     markdown: str
+    verification: dict = Field(default_factory=dict)
 
 
 class ComplexExecutionOutcome(StrictModel):

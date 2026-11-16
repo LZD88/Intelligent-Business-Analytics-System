@@ -21,6 +21,17 @@ test("dashboard displays stale version and measured domain accuracy", () => {
   const html = renderDashboard({ evaluation: { available: true, stale: true, domains: [{ name: "销售", samples: 2, correct: 1, accuracy: .5, mean_latency_ms: 100 }], token_usage: {}, failures: {} }, runtime: { retained_samples: 0, statuses: {} } });
   assert.match(html, /50.0%/); assert.match(html, /需要重新验收/);
 });
+test("dashboard identifies model changes and exposes measured tail latency", () => {
+  const html = renderDashboard({ evaluation: { available: false, stale: true,
+    current_configuration: { chat_endpoint: "https://example.com/v1", thinking: "disabled", models: { sql: "fast", validator: "<review>" } },
+    stale_reasons: ["接口、模型参数、执行策略或指标口径已变化"],
+    performance: { simple: { samples: 20, p50_latency_ms: 100, p95_latency_ms: 200, mean_tokens_per_question: 30 } }
+  }, runtime: { retained_samples: 0, statuses: {} } });
+  assert.match(html, /P95 200 ms/);
+  assert.match(html, /sql：fast/);
+  assert.match(html, /&lt;review&gt;/);
+  assert.match(html, /旧报告不能代表当前配置/);
+});
 test("plan review shows unstarted execution and summary instead of circuit failure", () => {
   const html = renderAgentWorkflow({ query_type: "complex", agent_mode: "plan_execute", agent_status: "awaiting_plan", plan: { steps: [] }, step_results: [] });
   assert.match(html, /等待计划确认，尚未执行/); assert.ok(!html.includes("已熔断"));
