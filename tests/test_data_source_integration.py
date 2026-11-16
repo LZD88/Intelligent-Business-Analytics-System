@@ -20,15 +20,26 @@ def test_real_mysql_source_discovery_scope_and_safe_execution(tmp_path):
     password = os.environ["CHATBI_P0_DB_PASSWORD"]
     schema = discover_mysql(config, password)
     assert len(schema) == 30
+    from chatbi.infrastructure.schema_metadata import seed_column_types
+    import sqlglot
+    types = seed_column_types()
+    for table, fields in types.items():
+        for column, kind in fields.items():
+            if kind == "BOOLEAN" and schema.column_types[table][column].lower() == "tinyint(1)":
+                continue  # MySQL stores BOOLEAN using this exact alias.
+            assert sqlglot.parse_one(kind, into=sqlglot.exp.DataType, read="mysql") == sqlglot.parse_one(
+                schema.column_types[table][column], into=sqlglot.exp.DataType, read="mysql")
     selected = validate_allowlist({"sales_orders": ["order_id", "order_status"]}, schema)
     runtime = ProductRuntime(Settings(control_store_path=tmp_path/"control.db", metric_registry_path=tmp_path/"metrics.db"))
     actor = runtime.store.create_user("owner", "integration-password1", bootstrap=True)
-    source = runtime.store.save_source(actor, name="只读接入", config=config, secret=runtime.vault.encrypt(password), schema=selected)
+    source = runtime.store.save_source(actor, name="只读接入", config={**config, "column_types": schema.column_types}, secret=runtime.vault.encrypt(password), schema=selected)
     a, s = principal_context.set(actor), source_context.set(source)
     try:
         settings, whitelist, user, db_config, _ = runtime.snapshot()
         settings = settings.model_copy(update={"openai_api_key": SecretStr("integration-placeholder"), "intent_api_key": SecretStr("integration-placeholder")})
         assert not runtime.catalog().snapshot()[1].indicators
+        assert "net_amount" not in whitelist.column_types["sales_orders"]
+        assert "column_types" not in db_config
         service = build_query_service(settings, schema=whitelist, user=user, db_config=db_config)
         try:
             sql = service.security.secure("SELECT COUNT(*) AS `订单数` FROM sales_orders WHERE order_status='completed'", user)

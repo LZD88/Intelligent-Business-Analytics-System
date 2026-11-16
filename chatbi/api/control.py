@@ -138,7 +138,8 @@ def install_control(app, runtime):
         if principal_context.get().role != "admin":
             raise AccessDenied("需要管理员权限")
         try:
-            return {"schema": discover_mysql(payload.config(), payload.password.get_secret_value())}
+            found = discover_mysql(payload.config(), payload.password.get_secret_value())
+            return {"schema": found, "column_types": getattr(found, "column_types", {})}
         except Exception as exc:
             # Vendor errors may contain host, username and credentials.
             message = str(exc) if type(exc) is ValueError else "连接失败，请检查地址、TLS 与只读账号"
@@ -149,8 +150,11 @@ def install_control(app, runtime):
         if actor.role != "admin":
             raise AccessDenied("需要管理员权限")
         try:
-            schema = validate_allowlist(payload.tables, discover_mysql(payload.config(), payload.password.get_secret_value()))
-            identity = store.save_source(actor, name=payload.name, config=payload.config(),
+            discovered = discover_mysql(payload.config(), payload.password.get_secret_value())
+            schema = validate_allowlist(payload.tables, discovered)
+            types = {t: {f: k for f, k in fs.items() if f in schema.get(t, ())}
+                     for t, fs in getattr(discovered, "column_types", {}).items() if t in schema}
+            identity = store.save_source(actor, name=payload.name, config={**payload.config(), "column_types": types},
                 secret=runtime.vault.encrypt(payload.password.get_secret_value()), schema=schema, source_id=source_id)
             return store.public_source(store.source(actor, identity))
         except ValueError as exc:

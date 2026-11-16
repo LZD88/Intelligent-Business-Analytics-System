@@ -10,6 +10,7 @@ from chatbi.domain.security import DEFAULT_SCHEMA, RowLevelFilter, UserContext
 from chatbi.infrastructure.control_store import AccessDenied, ControlStore, Principal, principal_context, source_context
 from chatbi.infrastructure.data_sources import CredentialVault
 from chatbi.infrastructure.metric_registry import MetricRegistry
+from chatbi.infrastructure.schema_metadata import TypedSchema
 
 
 class ProductRuntime:
@@ -34,7 +35,8 @@ class ProductRuntime:
         policy = source.get("policy", {})
         if source_id != "demo":
             config = source["config"]
-            schema = {t: frozenset(f) for t, f in source["schema"].items() if t in policy.get("tables", source["schema"])}
+            schema = TypedSchema({t: frozenset(f) for t, f in source["schema"].items() if t in policy.get("tables", source["schema"])},
+                                 column_types=config.get("column_types", {}))
             settings = settings.model_copy(update={"db_host": config["host"], "db_port": config["port"],
                 "db_name": config["database"], "db_user": config["user"],
                 "db_password": SecretStr(self.vault.decrypt(source["secret"])),
@@ -47,7 +49,7 @@ class ProductRuntime:
             "revision": source["revision"], "policy": policy, "schema": {t: sorted(f) for t, f in schema.items()}}, sort_keys=True).encode()).hexdigest()
         config = None
         if source_id != "demo":
-            config = {key: value for key, value in source["config"].items() if key != "ssl_ca"}
+            config = {key: source["config"][key] for key in ("host", "port", "database", "user")}
             config["password"] = settings.db_password.get_secret_value()
             if source["config"].get("ssl_ca"):
                 config["ssl"] = {"ca": source["config"]["ssl_ca"], "check_hostname": True}

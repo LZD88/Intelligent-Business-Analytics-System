@@ -96,6 +96,8 @@ class PlannerAgent:
 4. 复杂口径先聚合再关联时使用 aggregate_then_join，并填写 grain 和 join_keys。
 5. 覆盖所有已识别治理指标。source 固定填写 model。
 6. 每步 expected_columns 为强制输出契约，不可为空：声明中文列名、维度/指标及真实数据类型。
+   SQL 中 INT/BIGINT 的直接输出必须为 integer，不能因为是ID就声明 string；
+   VARCHAR/CHAR 为 string，DECIMAL 计算结果为 decimal，比例可为 percentage。
 7. 后续步骤需要使用前一步筛选出的对象或指标值时，声明 input_bindings，包含 source_step_id、
    name（input_1 等）和 columns（上游 expected_columns 中的中文列名），并同时声明 depends_on。
    上游只输出下游所需结果，避免全量明细和超大输入。只做上游结果计算时 required_tables 可为空。

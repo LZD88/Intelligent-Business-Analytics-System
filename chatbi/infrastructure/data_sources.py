@@ -10,6 +10,7 @@ import threading
 from cryptography.fernet import Fernet
 import pymysql  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from chatbi.infrastructure.schema_metadata import TypedSchema
 
 _vault_lock = threading.Lock()
 
@@ -73,14 +74,16 @@ def discover_mysql(config: dict, password: str) -> dict:
                 if privileges - {"SELECT", "SHOW VIEW", "USAGE"}:
                     raise ValueError("账号包含写入或管理权限，请改用只读账号")
             cursor.execute("SET TRANSACTION READ ONLY")
-            cursor.execute("""SELECT TABLE_NAME,COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+            cursor.execute("""SELECT TABLE_NAME,COLUMN_NAME,COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
               WHERE TABLE_SCHEMA=%s ORDER BY TABLE_NAME,ORDINAL_POSITION""", (config["database"],))
             schema: dict[str, list[str]] = {}
-            for table, column in cursor.fetchall():
+            column_types: dict[str, dict[str, str]] = {}
+            for table, column, kind in cursor.fetchall():
                 if not re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", table + "") or not re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", column):
                     continue
                 schema.setdefault(table.lower(), []).append(column.lower())
-            return schema
+                column_types.setdefault(table.lower(), {})[column.lower()] = kind
+            return TypedSchema(schema, column_types=column_types)
     finally:
         connection.rollback()
         connection.close()
