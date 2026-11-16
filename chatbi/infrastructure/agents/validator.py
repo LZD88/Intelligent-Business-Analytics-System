@@ -32,7 +32,7 @@ class ResultValidationAgent:
                                  "limitations": ["模型语义复核不能证明源数据正确。", "未配置可加总口径时，不推断总分关系。"]}
         if truncated:
             result["limitations"].append("结果已截断，总量与明细一致性无法完整校验。")
-        payload = {"question": question, "sql": sql, "governed_metrics": knowledge,
+        payload = {"question": question, "sql": self.review_sql(sql), "governed_metrics": knowledge,
                    "output_contract": contract, "columns": columns, "sample_rows": rows[:12],
                    "returned_rows": len(rows), "truncated": truncated}
         try:
@@ -43,6 +43,8 @@ class ResultValidationAgent:
                 "input_1 等只读 CTE 的常量行来自受校验的真实上游结果；检查 upstream_provenance 的查询口径，"
                 "筛选和聚合可已在上游完成，下游只做排名或筛选时不应重复要求关联原表、换汇或重算指标。"
                 "仅对确定的错误提出问题，无法证明的标记未验证；样本不能证明所有行正确。"
+                "SQL 已经按 MySQL AST 解析，NOT (x IS NULL) 与 x IS NOT NULL 等价；"
+                "不把等价语法、别名和排版建议当作业务错误。"
                 '只输出 JSON：{"issues":["具体中文错误及修复方向"],"checks":{"指标口径":"通过/未验证及理由","筛选与维度":"...","关联放大":"...","总分一致性":"..."}}。',
                 json.dumps(payload, ensure_ascii=False, default=str),
             )
@@ -56,6 +58,15 @@ class ResultValidationAgent:
         if issues:
             result["status"] = "rejected"
         return result
+
+    @staticmethod
+    def review_sql(sql: str) -> str:
+        """Make parsed NOT/IS precedence explicit without changing executed SQL."""
+        tree = sqlglot.parse_one(sql, read="mysql")
+        for node in tree.find_all(exp.Not):
+            if isinstance(node.this, exp.Is):
+                node.set("this", exp.Paren(this=node.this.copy()))
+        return tree.sql(dialect="mysql")
 
     @staticmethod
     def arithmetic_checks(columns: list[str], rows: list, contract: dict[str, Any] | None = None) -> list[str]:

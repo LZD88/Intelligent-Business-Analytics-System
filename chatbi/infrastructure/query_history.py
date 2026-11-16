@@ -5,8 +5,10 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import sqlite3
+from chatbi.infrastructure.control_database import connect as connect_control
 from typing import Any, Iterator
 from chatbi.application.failure_control import encode_state, decode_state
+from chatbi.infrastructure.shared_queue import fence
 
 TERMINAL = {"succeeded", "failed", "cancelled", "interrupted", "timed_out", "suspended"}
 
@@ -46,7 +48,7 @@ class QueryHistory:
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
-        db = sqlite3.connect(self.path, timeout=10)
+        db = connect_control(self.path, timeout=10)
         try:
             db.row_factory = sqlite3.Row
             db.execute("PRAGMA foreign_keys=ON")
@@ -76,6 +78,7 @@ class QueryHistory:
             raise ResumeConflict("分析断点超过 8 MB，无法安全挂起，请缩小分析范围。")
         response = json.dumps({"question": state["question"], "suspension": public}, ensure_ascii=False)
         with self.connect() as db:
+            fence(db, query_id)
             db.execute("INSERT INTO analysis_checkpoints VALUES (?,?,?) ON CONFLICT(query_id) DO UPDATE SET state=excluded.state,updated_at=excluded.updated_at",
                        (query_id, payload, timestamp()))
             db.execute("UPDATE queries SET status='suspended',response=?,error=NULL,updated_at=? WHERE id=?",
@@ -128,11 +131,13 @@ class QueryHistory:
             db.execute("BEGIN IMMEDIATE")
             if not db.execute("SELECT 1 FROM queries WHERE id=?", (query_id,)).fetchone():
                 return
+            fence(db, query_id)
             sequence = db.execute("SELECT COALESCE(MAX(sequence),0)+1 FROM query_events WHERE query_id=?", (query_id,)).fetchone()[0]
             db.execute("INSERT INTO query_events VALUES (?,?,?,?,?)", (query_id, sequence, stage, json.dumps(detail or {}, ensure_ascii=False), timestamp()))
 
     def status(self, query_id: str, status: str) -> None:
         with self.connect() as db:
+            fence(db, query_id)
             db.execute("UPDATE queries SET status=?,updated_at=? WHERE id=?", (status, timestamp(), query_id))
 
     def finish(self, query_id: str, status: str, response: dict[str, Any] | None = None, error: dict[str, Any] | None = None) -> None:
@@ -143,6 +148,7 @@ class QueryHistory:
             payload = json.dumps({"history_payload_omitted": True, "question": (response or {}).get("question"),
                                   "message": "结果超过历史保存上限，请重新查询。"}, ensure_ascii=False)
         with self.connect() as db:
+            fence(db, query_id)
             db.execute("UPDATE queries SET status=?,response=?,error=?,updated_at=? WHERE id=?",
                        (status, payload, json.dumps(error, ensure_ascii=False) if error else None, timestamp(), query_id))
             if status in {"succeeded", "cancelled", "failed", "timed_out"}:
@@ -154,12 +160,24 @@ class QueryHistory:
               ORDER BY created_at DESC LIMIT -1 OFFSET ?
             )""", (self.retain,))
 
-    def list_history(self, limit: int = 30, offset: int = 0, favorites: bool = False) -> list[dict[str, Any]]:
+    def list_history(self, limit: int = 30, offset: int = 0, favorites: bool = False, *, scope: dict | None = None) -> list[dict[str, Any]]:
+        where, values = self.scope_clause(scope)
         with self.connect() as db:
-            return [dict(row) for row in db.execute("""
-              SELECT id,question,status,created_at,updated_at,favorite,feedback,feedback_note,error
-              FROM queries WHERE (?=0 OR favorite=1) ORDER BY created_at DESC LIMIT ? OFFSET ?
-            """, (int(favorites), limit, offset))]
+            return [dict(row) for row in db.execute("SELECT id,question,status,created_at,updated_at,favorite,feedback,feedback_note,error "
+                "FROM queries WHERE (?=0 OR favorite=1) AND " + where + " ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (int(favorites), *values, limit, offset))]
+
+    @staticmethod
+    def scope_clause(scope):
+        if scope is None:
+            return "1=1", ()
+        clause = "json_extract(request_options,'$.owner')=? AND json_extract(request_options,'$.tenant')=? AND json_extract(request_options,'$.source_id')=?"
+        values: tuple[Any, ...] = (scope["owner"], scope["tenant"], scope["source_id"])
+        if scope.get("access_version"):
+            clause += " AND (json_extract(request_options,'$.access_version')=? OR json_extract(request_options,'$.access_version') IS NULL)"
+            values += (scope["access_version"],)
+        return clause, values
+
 
     def get(self, query_id: str) -> dict[str, Any] | None:
         with self.connect() as db:
@@ -182,8 +200,9 @@ class QueryHistory:
             with self.connect() as db:
                 db.execute("UPDATE queries SET " + ",".join(f"{key}=?" for key in allowed) + " WHERE id=?", (*allowed.values(), query_id))
 
-    def clear(self, query_id: str | None = None) -> int:
+    def clear(self, query_id: str | None = None, *, scope: dict | None = None) -> int:
+        where, values = self.scope_clause(scope)
         with self.connect() as db:
-            cursor = db.execute("DELETE FROM queries WHERE status NOT IN ('queued','running','cancelling') AND "
-                                + ("id=?" if query_id else "favorite=0 AND status!='suspended'"), (query_id,) if query_id else ())
+            cursor = db.execute("DELETE FROM queries WHERE " + where + " AND status NOT IN ('queued','running','cancelling') AND "
+                                + ("id=?" if query_id else "favorite=0 AND status!='suspended'"), (*values, query_id) if query_id else values)
             return cursor.rowcount

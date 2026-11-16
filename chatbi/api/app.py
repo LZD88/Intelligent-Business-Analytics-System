@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 import logging
 from pathlib import Path
 from typing import Any, Callable
@@ -37,6 +37,11 @@ from chatbi.infrastructure.intent import DisabledIntentClassifier, FallbackInten
 from chatbi.logging import configure_logging, new_request_id
 from chatbi.settings import Settings, get_settings
 from database import DatabaseClient
+from chatbi.application.product_runtime import ProductRuntime
+from chatbi.api.control import install_control
+from chatbi.api.feedback import install_feedback, feedback_examples
+from chatbi.infrastructure.source_schema import SourceSchema
+from chatbi.infrastructure.control_store import AccessDenied, principal_context, source_context
 from llm_client import LLMClient
 from indicator_knowledge import IndicatorKnowledge
 from chatbi.infrastructure.agents.executor import ExecutionAgent
@@ -111,16 +116,16 @@ def refresh_query_catalog(service: Any, knowledge: IndicatorKnowledge) -> None:
         service.plan_execute.planner.indicators = knowledge
 
 
-def build_query_service(settings: Settings) -> ChatBIQueryService:
+def build_query_service(settings: Settings, *, knowledge=None, schema=None, user=None, db_config=None) -> ChatBIQueryService:
     settings.validate_query_runtime()
-    _, indicators = MetricRegistry(settings.metric_registry_path).snapshot()
-    schema_provider = FallbackSchemaProvider(SemanticSchemaProvider(), StaticSchemaProvider())
+    indicators = knowledge if knowledge is not None else MetricRegistry(settings.metric_registry_path).snapshot()[1]
+    schema_provider: Any = FallbackSchemaProvider(SemanticSchemaProvider(), StaticSchemaProvider())
     security = QuerySecurityManager(
-        schema={table: fields for table, fields in QuerySecurityManager().schema.items() if table in settings.allowed_tables},
+        schema=schema if schema is not None else {table: fields for table, fields in QuerySecurityManager().schema.items() if table in settings.allowed_tables},
         max_rows=settings.query_max_rows,
         sensitive_fields=settings.sensitive_fields,
     )
-    database = DatabaseClient(query_timeout_seconds=settings.query_timeout_seconds)
+    database = DatabaseClient(db_config=db_config, query_timeout_seconds=settings.query_timeout_seconds)
     intent_classifier = (
         FallbackIntentClassifier(QwenIntentClassifier(settings))
         if settings.feature_intent_router
@@ -137,14 +142,21 @@ def build_query_service(settings: Settings) -> ChatBIQueryService:
             # governed static/legacy Schema path.
             logger.warning("simple_semantic_startup_fallback reason=%s", type(exc).__name__)
     llm = LLMClient(settings)
-    complex_semantic = ComplexSemanticResolver(settings, indicators, simple_semantic)
-    user_context = UserContext.demo_admin()
+    clients = {role: LLMClient(settings, client=llm.client, role=role,
+                              usage=llm.usage, usage_by_role=llm.usage_by_role)
+               for role in ("planner", "executor", "validator", "summary")}
+    complex_semantic: Any = ComplexSemanticResolver(settings, indicators, simple_semantic)
+    user_context = user or UserContext.demo_admin()
+    if schema is not None:
+        schema_provider = SourceSchema(schema, indicators)
+        complex_semantic = SourceSchema(schema, indicators)
+        simple_semantic = None
     plan_execute = None
     if settings.feature_complex_plan_execute:
         plan_execute = PlanAndExecuteService(
-            PlannerAgent(llm, settings, indicators),
-            ExecutionAgent(llm, security, database, settings, user_context, complex_semantic, ResultValidationAgent(llm)),
-            SummaryAgent(llm, settings),
+            PlannerAgent(clients["planner"], settings, indicators, schema=schema),
+            ExecutionAgent(clients["executor"], security, database, settings, user_context, complex_semantic, ResultValidationAgent(clients["validator"])),
+            SummaryAgent(clients["summary"], settings),
         )
     return ChatBIQueryService(
         llm=llm,
@@ -158,7 +170,7 @@ def build_query_service(settings: Settings) -> ChatBIQueryService:
         user_context=user_context,
         plan_execute=plan_execute,
         complex_semantic=complex_semantic,
-        validator=ResultValidationAgent(llm),
+        validator=ResultValidationAgent(clients["validator"]),
     )
 
 
@@ -169,6 +181,7 @@ def create_app(
 ) -> FastAPI:
     resolved = settings or get_settings()
     configure_logging(resolved.log_level)
+    product = ProductRuntime(resolved)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -185,7 +198,7 @@ def create_app(
         except Exception as exc:
             app.state.startup_error = str(exc)
         app.state.jobs = QueryJobs(app.state.history, lambda question, query_id: execute_query(question, query_id).model_dump(mode="json"),
-                                   capacity=resolved.query_job_capacity, timeout=resolved.query_total_timeout_seconds)
+                                   capacity=resolved.query_job_capacity, timeout=resolved.query_total_timeout_seconds, workers=resolved.query_workers, shared=resolved.shared_queue_enabled, lease_seconds=resolved.queue_lease_seconds)
         yield
         stopped = app.state.jobs.close()
         service = app.state.query_service
@@ -199,6 +212,14 @@ def create_app(
         description="安全的本地自然语言转 MySQL 查询 API",
         lifespan=lifespan,
     )
+
+    app.state.product = product
+    install_control(app, product)
+    def scoped_service():
+        scope_settings, schema, user, db_config, _ = product.snapshot()
+        return build_query_service(scope_settings, knowledge=product.catalog().snapshot()[1],
+            schema=schema if source_context.get() != "demo" else None, user=user, db_config=db_config)
+    install_feedback(app, product, scoped_service)
 
     @app.exception_handler(ChatBIError)
     async def domain_error_handler(request: Request, exc: ChatBIError) -> JSONResponse:
@@ -241,13 +262,16 @@ def create_app(
     }
 
     def policy_fingerprint() -> str:
+        from chatbi.application.evaluation_config import config_fingerprint, evaluation_config
         service = app.state.query_service
         value = repr((getattr(service, "user_context", None), resolved.query_allowed_tables,
                       resolved.query_sensitive_fields, resolved.db_host, resolved.db_port, resolved.db_name, resolved.db_user,
                       resolved.query_max_rows, resolved.complex_core_max_retries, resolved.complex_aux_max_retries,
                       resolved.complex_max_resume_rounds, resolved.feature_complex_plan_execute,
                       resolved.feature_rules, resolved.feature_guards, resolved.feature_indicator_knowledge))
-        return hashlib.sha256(value.encode()).hexdigest()
+        identity = config_fingerprint(evaluation_config(resolved, ""))
+        scope = product.snapshot()[-1]
+        return hashlib.sha256((value + identity + scope).encode()).hexdigest()
 
     def check_resume_state(state: dict[str, Any], revision: str) -> None:
         if (state.get("catalog_revision") != revision or state.get("execution_version") != app.state.source_version
@@ -255,14 +279,27 @@ def create_app(
             raise ResumeConflict("指标口径、执行代码或数据权限已变更，请终止旧分析后重新查询，避免混用结果。")
 
     def execute_query(question: str, request_id: str) -> QueryResponse:
+        options = query_options() or (app.state.history.get(request_id) or {}).get("request_options") or {}
+        with product.bind_job(options):
+            return execute_scoped(question, request_id)
+
+    def execute_scoped(question: str, request_id: str) -> QueryResponse:
         service = app.state.query_service
+        isolated = service_factory is build_query_service
+        catalog = product.catalog()
+        if isolated and service is not None:
+            scope_settings, scope_schema, scope_user, db_config, _ = product.snapshot()
+            service = build_query_service(scope_settings, knowledge=catalog.snapshot()[1],
+                schema=scope_schema if source_context.get() != "demo" else None,
+                user=scope_user, db_config=db_config)
         if service is None:
             raise ChatBIError(ErrorCode.MODEL_UNAVAILABLE, "查询服务配置不完整，请检查就绪状态。")
-        while not app.state.catalog_lock.acquire(timeout=.2):
+        lock = None if isolated else app.state.catalog_lock
+        while lock is not None and not lock.acquire(timeout=.2):
             checkpoint()
         try:
             checkpoint()
-            revision, knowledge = app.state.catalog.snapshot()
+            revision, knowledge = catalog.snapshot()
             resume = resumed_state()
             if resume:
                 try:
@@ -272,7 +309,7 @@ def create_app(
                     public = dict((item or {}).get("response", {}).get("suspension", {}))
                     public.update(message=str(conflict), options=["abort"])
                     raise AnalysisSuspended(resume, public) from conflict
-            if app.state.catalog_revision != revision:
+            if isolated or app.state.catalog_revision != revision:
                 refresh_query_catalog(service, knowledge)
                 app.state.catalog_revision = revision
             try:
@@ -297,18 +334,26 @@ def create_app(
                 if not isinstance(service, ChatBIQueryService):
                     require_clarification(actual)
                 before = dict(getattr(service.llm, "usage", {})) if hasattr(service, "llm") else {}
-                with analysis_options({**options, "analysis_context": context, "clarify_before_query": True}):
+                role_before = {role: dict(counts) for role, counts in getattr(getattr(service, "llm", None), "usage_by_role", {}).items()}
+                with analysis_options({**options, "analysis_context": context, "clarify_before_query": True,
+                                       "reviewed_examples": feedback_examples(product, question)}):
                     result = service.query(actual, request_id=request_id)
                 if result.query_type == "non_query":
                     context = {**context, "turns": context.get("turns", [])[:-1], "conversation_only": True}
                 usage = {key: value - before.get(key, 0) for key, value in getattr(getattr(service, "llm", None), "usage", {}).items()}
+                if role_before:
+                    usage["by_role"] = {role: {key: value - role_before.get(role, {}).get(key, 0) for key, value in counts.items()}
+                                        for role, counts in service.llm.usage_by_role.items()}
             except AnalysisSuspended as exc:
                 exc.state.update(catalog_revision=revision, execution_version=app.state.source_version,
                                  policy_fingerprint=policy_fingerprint())
                 raise
             checkpoint()
         finally:
-            app.state.catalog_lock.release()
+            if lock is not None:
+                lock.release()
+            if isolated:
+                service.database.close()
         return QueryResponse(
             request_id=result.request_id,
             question=question,
@@ -355,11 +400,11 @@ def create_app(
             raise ChatBIError(ErrorCode.INPUT_INVALID)
         from chatbi.infrastructure.intent import obvious_non_query
         if obvious_non_query(payload.question):
-            return {"analysis_context": {"turns": [{"question": payload.question}],
+            return {**product.options(), "analysis_context": {"turns": [{"question": payload.question}],
                     "parent_query_id": payload.parent_query_id}, "review_plan": False}
         parent = None
         if payload.parent_query_id:
-            parent = app.state.history.get(payload.parent_query_id)
+            parent = history_item(payload.parent_query_id)
             if not parent or parent["status"] != "succeeded" or not parent.get("response") or parent["response"].get("history_payload_omitted") or parent["response"].get("query_type") == "non_query":
                 raise HTTPException(409, "只能继续分析有完整结果的已完成记录。")
         try:
@@ -368,7 +413,7 @@ def create_app(
                 raise ValueError("对话上下文过长，请开启新分析。")
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
-        return {"analysis_context": context, "review_plan": payload.review_plan}
+        return {**product.options(), "analysis_context": context, "review_plan": payload.review_plan}
 
     @app.post("/api/v1/queries", response_model=QueryResponse, responses=error_responses)
     def create_query(payload: QueryRequest, request: Request) -> QueryResponse:
@@ -401,13 +446,13 @@ def create_app(
         host = request.url.hostname
         peer = request.client.host if request.client else None
         test_call = resolved.app_env == "test" and peer == "testclient"
-        if not test_call and (host not in local_hosts or peer not in local_hosts):
+        if not resolved.auth_enabled and not test_call and (host not in local_hosts or peer not in local_hosts):
             raise HTTPException(403, "指标管理仅限本机访问")
         if write and request.headers.get("origin"):
             origin = urlparse(request.headers["origin"])
             if origin.netloc != request.url.netloc or origin.scheme != request.url.scheme:
                 raise HTTPException(403, "拒绝跨站指标修改")
-        return request.app.state.catalog
+        return product.catalog()
 
     @app.post("/api/v1/query-jobs", status_code=202)
     def submit_job(payload: QueryRequest, request: Request) -> dict[str, Any]:
@@ -424,14 +469,14 @@ def create_app(
 
     def history_item(query_id: str) -> dict[str, Any]:
         item = app.state.history.get(query_id)
-        if item is None:
+        if item is None or not product.owns(item):
             raise HTTPException(404, "查询记录不存在")
         return item
 
     @app.get("/api/v1/history")
     def list_history(request: Request, limit: int = 30, offset: int = 0, favorites: bool = False) -> dict[str, Any]:
         local_catalog(request)
-        return {"items": app.state.history.list_history(min(max(limit, 1), 100), max(offset, 0), favorites)}
+        return {"items": app.state.history.list_history(min(max(limit, 1), 100), max(offset, 0), favorites, scope=product.options())}
 
     @app.get("/api/v1/history/{query_id}")
     def read_history(query_id: str, request: Request) -> dict[str, Any]:
@@ -448,7 +493,7 @@ def create_app(
     @app.delete("/api/v1/history")
     def clear_history(request: Request) -> dict[str, int]:
         local_catalog(request, write=True)
-        return {"deleted": app.state.history.clear()}
+        return {"deleted": app.state.history.clear(scope=product.options())}
 
     @app.delete("/api/v1/history/{query_id}")
     def delete_history(query_id: str, request: Request) -> dict[str, int]:
@@ -475,7 +520,7 @@ def create_app(
         if not state:
             raise HTTPException(409, "断点不存在，请重新查询")
         try:
-            check_resume_state(state, app.state.catalog.snapshot()[0])
+            check_resume_state(state, product.catalog().snapshot()[0])
             def transform(current):
                 if current.get("kind") == "clarification":
                     if payload.action != "clarify":
@@ -508,7 +553,7 @@ def create_app(
         if not state:
             raise HTTPException(409, "断点不存在")
         try:
-            check_resume_state(state, app.state.catalog.snapshot()[0])
+            check_resume_state(state, product.catalog().snapshot()[0])
             return preview_edits(state, payload.edits)
         except ResumeConflict as exc:
             raise HTTPException(409, str(exc)) from exc
@@ -531,6 +576,13 @@ def create_app(
                     cursor = event["sequence"]
                     yield f"id: {cursor}\nevent: progress\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
                 item = await run_in_threadpool(app.state.history.get, query_id)
+                if resolved.auth_enabled and not product.store.authenticate(request.cookies.get("chatbi_session")):
+                    return
+                try:
+                    if item is not None and not product.owns(item):
+                        return
+                except AccessDenied:
+                    return
                 if item is None or item["status"] in TERMINAL:
                     yield "event: done\ndata: {}\n\n"
                     return
@@ -556,9 +608,9 @@ def create_app(
         if item["status"] != "succeeded" or not item.get("response"):
             raise HTTPException(409, "只有已完成结果可以下钻。")
         response = item["response"]
-        service = app.state.query_service
+        service = scoped_service() if service_factory is build_query_service else app.state.query_service
         with app.state.catalog_lock:
-            if response.get("catalog_revision") != app.state.catalog.snapshot()[0]:
+            if response.get("catalog_revision") != product.catalog().snapshot()[0]:
                 raise HTTPException(409, "指标版本已变更，请重新分析后下钻。")
             try:
                 sql = build_detail_sql(source_result(response, payload.step_id), payload.dimension, payload.value)
@@ -567,6 +619,8 @@ def create_app(
             secured = service.security.secure(sql, service.user_context)
             columns, rows = service.database.execute(secured)
             columns, rows = service.security.mask_result(columns, rows, service.user_context)
+        if service_factory is build_query_service:
+            service.database.close()
         return {"columns": columns, "rows": rows, "sql": secured.sql,
                 "truncated": secured.limited and len(rows) >= secured.max_rows,
                 "note": "按原查询时间和筛选读取当前数据库明细；关联行不保证一行一单。达到行数上限时仅显示部分，不应用于核对总量。",
@@ -584,11 +638,14 @@ def create_app(
     @app.get("/api/v1/observability")
     def observability(request: Request) -> dict[str, Any]:
         from chatbi.application.observability import evaluation_dashboard
+        from chatbi.application.evaluation_config import evaluation_config
         local_catalog(request)
         with app.state.history.connect() as db:
-            statuses = {row[0]: row[1] for row in db.execute("SELECT status,COUNT(*) FROM queries GROUP BY status")}
+            statuses = {row[0]: row[1] for row in db.execute("SELECT status,COUNT(*) FROM queries WHERE json_extract(request_options,'$.owner')=? AND json_extract(request_options,'$.tenant')=? AND json_extract(request_options,'$.source_id')=? GROUP BY status", tuple(product.options()[key] for key in ("owner", "tenant", "source_id")))}
         semantic = getattr(app.state.query_service, "simple_semantic", None)
-        return {"evaluation": evaluation_dashboard(Path("reports/release-quality.json"), app.state.source_version),
+        revision, _ = product.catalog().snapshot()
+        return {"evaluation": evaluation_dashboard(Path("reports/release-quality.json"), app.state.source_version,
+                                                   evaluation_config(resolved, revision)),
                 "runtime": {"statuses": statuses, "retained_samples": sum(statuses.values())},
                 "retrieval": getattr(semantic, "diagnostics", {"encoder": "static_catalog", "fallback": True})}
 
@@ -604,14 +661,23 @@ def create_app(
 
     @app.post("/api/v1/metrics", status_code=201)
     def new_metric(payload: MetricDraft, request: Request) -> dict[str, Any]:
+        if resolved.auth_enabled:
+            payload = payload.model_copy(update={"owner": principal_context.get().user_id})
         return local_catalog(request, write=True).create_draft(payload)
 
     @app.post("/api/v1/metrics/{metric_id}/versions", status_code=201)
     def new_metric_version(metric_id: str, payload: MetricDraft, request: Request) -> dict[str, Any]:
+        if resolved.auth_enabled:
+            payload = payload.model_copy(update={"owner": principal_context.get().user_id})
         return local_catalog(request, write=True).create_draft(payload, metric_id)
 
     @app.post("/api/v1/metrics/{metric_id}/versions/{version}/{action}")
     def decide_metric(metric_id: str, version: int, action: str, payload: CatalogDecision, request: Request) -> dict[str, Any]:
+        if resolved.auth_enabled:
+            actor = principal_context.get()
+            if actor.role not in {"admin", "reviewer"}:
+                raise AccessDenied("需要审核员权限")
+            payload = payload.model_copy(update={"actor": actor.user_id})
         return local_catalog(request, write=True).transition(metric_id, version, action, payload)
 
     @app.get("/health/live", response_model=HealthResponse)
@@ -671,6 +737,14 @@ def create_app(
             if not index.exists():
                 raise HTTPException(status_code=404)
             return FileResponse(index)
+
+        @app.get("/login", include_in_schema=False)
+        async def login_page():
+            return FileResponse(web_dir / "login.html")
+
+        @app.get("/settings", include_in_schema=False)
+        async def settings_page():
+            return FileResponse(web_dir / "settings.html")
 
         @app.get("/metrics", include_in_schema=False)
         async def metrics_page() -> FileResponse:

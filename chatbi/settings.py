@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     metric_registry_path: Path = Path(".runtime/metrics.sqlite3")
     query_history_path: Path = Path(".runtime/query-history.sqlite3")
     history_retention: int = Field(default=200, ge=10, le=2000)
+    control_store_path: Path = Path(".runtime/control.sqlite3")
+    auth_enabled: bool = True
+    auth_cookie_secure: bool = False
+    auth_session_seconds: int = Field(default=28800, ge=300, le=604800)
+    query_workers: int = Field(default=1, ge=1, le=16)
+    complex_parallel_workers: int = Field(default=1, ge=1, le=8)
+    shared_queue_enabled: bool = False
+    queue_lease_seconds: int = Field(default=45, ge=5, le=300)
     query_job_capacity: int = Field(default=8, ge=1, le=32)
     query_total_timeout_seconds: int = Field(default=240, ge=1, le=1800)
 
@@ -37,6 +45,17 @@ class Settings(BaseSettings):
     llm_temperature: float = Field(default=0.1, ge=0.0, le=2.0)
     llm_max_tokens: int = Field(default=2000, ge=1, le=32000)
     llm_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
+    llm_thinking: Literal["auto", "enabled", "disabled"] = "auto"
+    llm_sql_model: str | None = None
+    llm_planner_model: str | None = None
+    llm_executor_model: str | None = None
+    llm_validator_model: str | None = None
+    llm_summary_model: str | None = None
+
+    def model_for(self, role: str) -> str:
+        if role not in {"sql", "planner", "executor", "validator", "summary"}:
+            raise ValueError(f"Unknown model role: {role}")
+        return getattr(self, f"llm_{role}_model") or self.llm_model
 
     intent_api_key: SecretStr | None = None
     intent_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"

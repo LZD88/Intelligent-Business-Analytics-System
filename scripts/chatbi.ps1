@@ -1,7 +1,10 @@
 param(
     [ValidateSet('start','status','stop','restart','doctor','evaluate')][string]$Action = 'status',
     [switch]$NoBrowser,
-    [switch]$ForgetSecrets
+    [switch]$ForgetSecrets,
+    [ValidateSet('smoke','full')][string]$EvaluationProfile = 'full',
+    [switch]$ResumeEvaluation,
+    [string[]]$CompareModels
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -14,6 +17,10 @@ $config = @{
     MySqlBin = 'C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqld.exe'
     MySqlData = 'C:\chatbi-mysql-data'
     VBoxManage = 'C:\Program Files\Oracle\VirtualBox\VBoxManage.exe'
+    LlmBaseUrl = 'https://api.deepseek.com/v1'
+    LlmModel = 'deepseek-chat'
+    LlmThinking = 'auto'
+    LlmSqlModel = ''; LlmPlannerModel = ''; LlmExecutorModel = ''; LlmValidatorModel = ''; LlmSummaryModel = ''
 }
 if (Test-Path -LiteralPath $configPath) {
     $overrides = Get-Content -Raw -LiteralPath $configPath | ConvertFrom-Json -AsHashtable
@@ -55,12 +62,23 @@ function ReadSecrets {
     return $values
 }
 function ConfigureEnvironment {
+    if (-not $env:AUTH_ENABLED) { $env:AUTH_ENABLED = 'true' }
+    if (-not $env:QUERY_WORKERS) { $env:QUERY_WORKERS = '4' }
+    if (-not $env:COMPLEX_PARALLEL_WORKERS) { $env:COMPLEX_PARALLEL_WORKERS = '2' }
+    if (-not $env:SHARED_QUEUE_ENABLED) { $env:SHARED_QUEUE_ENABLED = 'true' }
     $env:DB_HOST = '127.0.0.1'; $env:DB_PORT = [string]$config.MySqlPort
     $env:DB_NAME = 'chatbi_mvp'; $env:DB_USER = 'chatbi_reader'
     $env:SIMPLE_CHROMA_HOST = '127.0.0.1'; $env:SIMPLE_CHROMA_PORT = [string]$config.ChromaPort
     $env:APP_HOST = '127.0.0.1'; $env:APP_PORT = [string]$config.ApiPort
-    if (-not $env:OPENAI_BASE_URL) { $env:OPENAI_BASE_URL = 'https://api.deepseek.com/v1' }
-    if (-not $env:LLM_MODEL) { $env:LLM_MODEL = 'deepseek-chat' }
+    if (-not $env:OPENAI_BASE_URL) { $env:OPENAI_BASE_URL = $config.LlmBaseUrl }
+    if (-not $env:LLM_MODEL) { $env:LLM_MODEL = $config.LlmModel }
+    if (-not $env:LLM_THINKING) { $env:LLM_THINKING = $config.LlmThinking }
+    foreach ($role in @('Sql','Planner','Executor','Validator','Summary')) {
+        $name = "LLM_$($role.ToUpper())_MODEL"
+        if (-not [Environment]::GetEnvironmentVariable($name, 'Process') -and $config["Llm${role}Model"]) {
+            [Environment]::SetEnvironmentVariable($name, $config["Llm${role}Model"], 'Process')
+        }
+    }
     if (-not $env:INTENT_BASE_URL) { $env:INTENT_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1' }
     if (-not $env:INTENT_MODEL) { $env:INTENT_MODEL = 'qwen-plus' }
     $env:FEATURE_SIMPLE_CHROMA = 'true'
@@ -135,6 +153,9 @@ $savedEnvironment = @{}
 foreach ($name in @('OPENAI_API_KEY','INTENT_API_KEY','DB_PASSWORD','DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_ADMIN_USER','DB_ADMIN_PASSWORD','SIMPLE_CHROMA_HOST','SIMPLE_CHROMA_PORT','APP_HOST','APP_PORT','OPENAI_BASE_URL','LLM_MODEL','INTENT_BASE_URL','INTENT_MODEL','FEATURE_SIMPLE_CHROMA')) {
     $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
 }
+foreach ($name in @('AUTH_ENABLED','QUERY_WORKERS','COMPLEX_PARALLEL_WORKERS','SHARED_QUEUE_ENABLED','LLM_THINKING','LLM_SQL_MODEL','LLM_PLANNER_MODEL','LLM_EXECUTOR_MODEL','LLM_VALIDATOR_MODEL','LLM_SUMMARY_MODEL')) {
+    $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+}
 Push-Location -LiteralPath $projectRoot
 try {
     New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
@@ -154,7 +175,10 @@ try {
     EnsureDependencies
     $secureValues | Export-Clixml -LiteralPath $secretPath
     if ($Action -eq 'evaluate') {
-        & $pythonPath -m scripts.evaluate_release
+        $evaluationArgs = @('-m','scripts.evaluate_release','--profile',$EvaluationProfile)
+        if ($ResumeEvaluation) { $evaluationArgs += '--resume' }
+        if ($CompareModels) { $evaluationArgs += @('--output','reports/model-comparison.json','--compare-models'); $evaluationArgs += $CompareModels }
+        & $pythonPath @evaluationArgs
         if ($LASTEXITCODE -ne 0) { throw 'Real-model gate did not pass. Review reports/release-quality.json or check configuration if no report exists.' }
         return
     }

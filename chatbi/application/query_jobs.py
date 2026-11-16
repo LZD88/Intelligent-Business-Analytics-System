@@ -9,17 +9,25 @@ from chatbi.application.progress import QueryControl, QueryStopped, query_contro
 from chatbi.domain.errors import ChatBIError
 from chatbi.infrastructure.query_history import QueryHistory, TERMINAL
 from chatbi.application.failure_control import AnalysisSuspended
+from chatbi.infrastructure.shared_queue import SharedQueue, SharedEvent
 
 
 class QueryJobs:
-    def __init__(self, history: QueryHistory, execute: Callable[[str, str], dict[str, Any]], *, capacity: int = 8, timeout: float = 240) -> None:
+    def __init__(self, history: QueryHistory, execute: Callable[[str, str], dict[str, Any]], *, capacity: int = 8, timeout: float = 240, workers: int = 1, shared: bool = False, lease_seconds: int = 45) -> None:
         self.history, self.execute, self.timeout = history, execute, timeout
-        self.queue: Queue[tuple[str, str, float]] = Queue(maxsize=capacity)
-        self.events: dict[str, Event] = {}
+        self.queue: Queue[tuple[str, str, float]] | SharedQueue = Queue(maxsize=capacity)
+        self.events: dict[str, Event | SharedEvent] = {}
         self.lock, self.stop = Lock(), Event()
-        history.recover()
-        self.worker = Thread(target=self._work, name="chatbi-query-worker", daemon=True)
-        self.worker.start()
+        self.shared = shared
+        if shared:
+            from chatbi.infrastructure.shared_queue import SharedQueue
+            self.queue = SharedQueue(history, capacity, timeout, lease_seconds)
+        else:
+            history.recover()
+        self.workers = [Thread(target=self._work, name=f"chatbi-query-worker-{i}", daemon=True) for i in range(workers)]
+        self.worker = self.workers[0]
+        for worker in self.workers:
+            worker.start()
 
     def submit(self, question: str, options: dict[str, Any] | None = None) -> str:
         query_id = uuid4().hex
@@ -28,12 +36,20 @@ class QueryJobs:
                 raise Full()
             self.history.create(query_id, question, options=options)
             self.events[query_id] = Event()
-            self.queue.put_nowait((query_id, question, monotonic() + self.timeout))
+            try:
+                self.queue.put_nowait((query_id, question, monotonic() + self.timeout))
+            except Full:
+                self.events.pop(query_id, None)
+                self.history.finish(query_id, "cancelled", error={"code": "queue_full", "message": "队列已满，未执行"})
+                raise
         return query_id
 
     def cancel(self, query_id: str) -> bool:
         with self.lock:
             event = self.events.get(query_id)
+            if self.shared:
+                from chatbi.infrastructure.shared_queue import SharedEvent
+                event = SharedEvent(self.history, query_id)
             item = self.history.get(query_id)
             if item is not None and item["status"] == "suspended":
                 self.history.finish(query_id, "cancelled", error={"code": "cancelled", "message": "已终止挂起分析，断点已清理。"})
@@ -54,7 +70,12 @@ class QueryJobs:
                 raise Full()
             question = self.history.claim_resume(query_id, action, clarification, transform)
             self.events[query_id] = Event()
-            self.queue.put_nowait((query_id, question, monotonic() + self.timeout))
+            try:
+                self.queue.put_nowait((query_id, question, monotonic() + self.timeout))
+            except Full:
+                self.events.pop(query_id, None)
+                self.history.status(query_id, "suspended")
+                raise
         return query_id
 
     def _finish_or_preserve(self, query_id: str, status: str, error: dict[str, Any]) -> None:
@@ -77,6 +98,10 @@ class QueryJobs:
                 query_id, question, deadline = self.queue.get(timeout=.2)
             except Empty:
                 continue
+            if self.shared:
+                from chatbi.infrastructure.shared_queue import SharedEvent
+                with self.lock:
+                    self.events[query_id] = SharedEvent(self.history, query_id)
             cancel_event = self.events[query_id]
             try:
                 with query_control(QueryControl(cancel_event, deadline, lambda stage, detail: self.history.event(query_id, stage, detail),
@@ -102,6 +127,8 @@ class QueryJobs:
                         except Exception:
                             self.history.finish(query_id, "failed", error={"code": "checkpoint_failed", "message": "断点无法保存，请缩小分析范围后重新查询。"})
             except QueryStopped as exc:
+                if exc.code == "lease_lost":
+                    continue
                 status = "timed_out" if exc.code == "deadline_exceeded" else "cancelled"
                 with self.lock:
                     item = self.history.get(query_id)
@@ -132,6 +159,9 @@ class QueryJobs:
         with self.lock:
             for event in self.events.values():
                 event.set()
-        self.worker.join(timeout=2)
+        for worker in self.workers:
+            worker.join(timeout=2)
+        if isinstance(self.queue, SharedQueue):
+            self.queue.close()
         # Queued records are marked interrupted on next startup; never replay silently.
-        return not self.worker.is_alive()
+        return not any(worker.is_alive() for worker in self.workers)

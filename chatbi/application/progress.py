@@ -4,7 +4,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from threading import Event
 from time import monotonic
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, Protocol
 
 
 class QueryStopped(BaseException):
@@ -13,9 +13,13 @@ class QueryStopped(BaseException):
         self.code = code
 
 
+class CancelSignal(Protocol):
+    def is_set(self) -> bool: ...
+
+
 @dataclass
 class QueryControl:
-    cancel: Event
+    cancel: CancelSignal
     deadline: float
     emit: Callable[[str, dict[str, Any]], None]
     resume_state: dict[str, Any] | None = None

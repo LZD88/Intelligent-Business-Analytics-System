@@ -38,7 +38,7 @@ def ambiguity_questions(question: str) -> list[dict[str, Any]]:
     questions = []
     if re.search(r"(?<!净)(?<!毛)利润(?!率)", question) and not any(word in question for word in ("毛利", "净利润", "利润口径已确认")):
         questions.append({"id": "metric", "question": "“利润”使用哪个指标口径？", "options": ["毛利", "净利润"]})
-    if re.search(r"近期|最近|这段时间", question) and not re.search(r"最近\s*\d+\s*(?:天|周|个?月)|20\d{2}[-年/]", question):
+    if re.search(r"近期|最近|这段时间", question) and not re.search(r"最近\s*[\d一二两三四五六七八九十百]+\s*(?:天|周|个?月)|20\d{2}[-年/]", question):
         questions.append({"id": "time", "question": "请明确时间范围（日期区间或年份与季度）。", "options": []})
     if re.search(r"最好|最差|表现好|表现差", question) and not re.search(r"按.+(?:排序|排名)|以.+为(?:准|标准)|排名口径已确认", question):
         questions.append({"id": "ranking", "question": "按什么标准评价表现？", "options": ["收入最高", "毛利率最高", "净利润最高"]})
@@ -62,9 +62,9 @@ def apply_answers(question: str, questions: list[dict[str, Any]], answers: dict[
         if not answer or len(answer) > 160 or (item["options"] and answer not in item["options"]):
             raise ValueError(f"请回答：{item['question']}")
         if item["id"] == "time":
-            if not re.search(r"20\d{2}|最近\s*\d+\s*(?:天|周|个?月)", answer):
+            if not re.search(r"20\d{2}|最近\s*[\d一二两三四五六七八九十百]+\s*(?:天|周|个?月)", answer):
                 raise ValueError("时间范围应包含年份或明确的最近天数/月数。")
-            question = re.sub(r"近期|最近(?!\d)|这段时间", answer, question)
+            question = re.sub(r"近期|最近(?!\s*[\d一二两三四五六七八九十百])|这段时间", answer, question)
         elif item["id"] == "metric":
             question = re.sub(r"(?<!净)(?<!毛)利润(?!率)", answer, question)
         else:

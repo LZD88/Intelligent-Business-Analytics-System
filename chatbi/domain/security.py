@@ -8,6 +8,7 @@ from typing import Any, Iterable, cast
 import sqlglot
 from sqlglot import exp
 from sqlglot.errors import ParseError
+from sqlglot.optimizer.scope import traverse_scope, Scope
 
 from chatbi.domain.errors import ChatBIError, ErrorCode
 
@@ -109,13 +110,13 @@ class QuerySecurityManager:
     ) -> None:
         if max_rows < 1:
             raise ValueError("max_rows must be positive")
-        source = schema or DEFAULT_SCHEMA
+        source = DEFAULT_SCHEMA if schema is None else schema
         self.schema = {
             table.lower(): frozenset(field.lower() for field in fields)
             for table, fields in source.items()
         }
         self.max_rows = max_rows
-        self.sensitive_fields = frozenset(field.lower() for field in sensitive_fields)
+        self.sensitive_fields = frozenset(field.lower().split(".")[-1] for field in sensitive_fields)
 
     def secure(self, sql: str, user: UserContext | None = None) -> SecuredQuery:
         if not sql or not sql.strip():
@@ -180,56 +181,54 @@ class QuerySecurityManager:
         statement: exp.Expression,
         user: UserContext | None,
     ) -> tuple[set[str], dict[str, str]]:
-        cte_names = {cte.alias_or_name.lower() for cte in statement.find_all(exp.CTE)}
         tables: set[str] = set()
         aliases: dict[str, str] = {}
-        allowed_by_user = user.allowed_tables if user else frozenset(self.schema)
-
-        for table in statement.find_all(exp.Table):
-            name = table.name.lower()
-            catalog = (table.catalog or "").lower()
-            database = (table.db or "").lower()
-            if name in cte_names and not database and not catalog:
-                continue
-            if catalog in SYSTEM_SCHEMAS or database in SYSTEM_SCHEMAS:
-                self._reject("禁止访问系统 Schema", table=table.sql())
-            if name not in self.schema or name not in allowed_by_user:
-                self._reject("查询引用了未授权的表", table=name)
-            tables.add(name)
-            aliases[name] = name
-            if table.alias:
-                aliases[table.alias.lower()] = name
+        allowed = user.allowed_tables if user else frozenset(self.schema)
+        for scope in traverse_scope(statement):
+            for alias, (_, source) in scope.selected_sources.items():
+                if not isinstance(source, exp.Table):
+                    continue
+                name = source.name.lower()
+                if source.db or source.catalog:
+                    self._reject("禁止跨库访问", table=name)
+                if name not in self.schema or name not in allowed:
+                    self._reject("查询引用了未授权的表", table=name)
+                tables.add(name)
+                aliases[alias.lower()] = name
         return tables, aliases
 
-    def _validate_columns(
-        self,
-        statement: exp.Expression,
-        tables: set[str],
-        aliases: dict[str, str],
-    ) -> None:
-        all_fields = set().union(*(self.schema[table] for table in tables)) if tables else set()
-        select_aliases = {
-            expression.alias.lower()
-            for select in statement.find_all(exp.Select)
-            for expression in select.expressions
-            if expression.alias
-        }
-        for column in statement.find_all(exp.Column):
-            name = column.name.lower()
-            if name == "*":
-                continue
-            if name in self.sensitive_fields:
-                self._reject("查询引用了敏感字段", field=name)
-            qualifier = column.table.lower() if column.table else ""
-            if qualifier:
-                table_name = aliases.get(qualifier)
-                if table_name is None:
-                    # A CTE/subquery output alias cannot be validated against physical columns here.
-                    continue
-                if name not in self.schema[table_name]:
-                    self._reject("查询引用了未知字段", field=f"{qualifier}.{name}")
-            elif name not in all_fields and name not in select_aliases:
-                self._reject("查询引用了未知字段", field=name)
+    def _validate_columns(self, statement, tables, aliases) -> None:
+        del aliases
+        if self.sensitive_fields & {field for table in tables for field in self.schema[table]}:
+            for star in statement.find_all(exp.Star):
+                # COUNT(*) reveals no field value. SELECT * and table.* do.
+                if not isinstance(star.parent, exp.Count):
+                    self._reject("敏感数据源禁止星号展开，请明确选择非敏感字段")
+        for scope in traverse_scope(statement):
+            sources = {name.lower(): source for name, source in scope.sources.items()}
+            fields: set[str] = set()
+            for source in sources.values():
+                if isinstance(source, exp.Table):
+                    fields.update(self.schema.get(source.name.lower(), ()))
+                else:
+                    fields.update(name.lower() for name in source.expression.named_selects)
+            select_aliases = {item.alias.lower() for item in getattr(scope.expression, "expressions", ()) if item.alias}
+            for column in scope.columns:
+                name, qualifier = column.name.lower(), column.table.lower()
+                if name in self.sensitive_fields:
+                    self._reject("查询引用了敏感字段", field=name)
+                if qualifier:
+                    source = sources.get(qualifier)
+                    parent = scope.parent
+                    while source is None and parent is not None:
+                        source = next((v for k,v in parent.sources.items() if k.lower() == qualifier), None)
+                        parent = parent.parent
+                    if source is None:
+                        self._reject("查询引用了未知表别名", field=qualifier)
+                    if isinstance(source, exp.Table) and name not in self.schema.get(source.name.lower(), ()):
+                        self._reject("查询引用了未知字段", field=f"{qualifier}.{name}")
+                elif name not in fields and name not in select_aliases and "*" not in fields:
+                    self._reject("查询引用了未知字段", field=name)
 
     def _validate_functions(self, statement: exp.Expression) -> None:
         for function in statement.find_all(exp.Func):
@@ -263,11 +262,12 @@ class QuerySecurityManager:
                 continue
 
             matched = False
-            for select in secured.find_all(exp.Select):
-                for table in select.find_all(exp.Table):
-                    # Apply the policy in the scope that directly reads the
-                    # physical table, including inside CTEs and subqueries.
-                    if table.find_ancestor(exp.Select) is not select or table.name.lower() != table_name:
+            for scope in traverse_scope(secured):
+                select = scope.expression
+                if not isinstance(select, exp.Select):
+                    continue
+                for _, (_, table) in scope.selected_sources.items():
+                    if not isinstance(table, exp.Table) or table.name.lower() != table_name:
                         continue
                     qualifier = (table.alias_or_name or table.name).lower()
                     predicate = exp.EQ(

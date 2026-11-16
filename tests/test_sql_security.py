@@ -136,3 +136,21 @@ def test_row_level_policy_is_injected_inside_cte_scope() -> None:
 def test_rejects_dangerous_functions(security: QuerySecurityManager, function: str) -> None:
     with pytest.raises(ChatBIError):
         security.secure(f"SELECT {function} FROM sales_orders")
+
+
+def test_sensitive_fields_cannot_escape_through_star_or_alias():
+    guard = QuerySecurityManager(sensitive_fields={"dim_customers.customer_name"})
+    for sql in ("SELECT * FROM dim_customers", "SELECT c.* FROM dim_customers c",
+                "SELECT c.customer_name AS public_name FROM dim_customers c"):
+        with pytest.raises(ChatBIError):
+            guard.secure(sql)
+    assert guard.secure("SELECT COUNT(*) FROM dim_customers")
+
+
+def test_aliases_are_validated_in_their_cte_scope():
+    guard = QuerySecurityManager()
+    assert guard.secure("WITH f AS (SELECT SUM(f.rd_expense) AS expense FROM finance_expenses f) SELECT f.expense FROM f")
+    with pytest.raises(ChatBIError):
+        guard.secure("WITH secret AS (SELECT * FROM secret) SELECT * FROM secret")
+    with pytest.raises(ChatBIError):
+        guard.secure("SELECT o.order_id FROM other_database.sales_orders o")
