@@ -213,6 +213,8 @@ uv run chatbi-build-index --force
 
 ## 6. 启动应用
 
+多人使用、登录初始化、真实数据源授权、反馈审核、并行部署和备份恢复见 [产品运维说明](docs/product-operations.md)。默认启用登录，首次通过本机 `/login` 设置管理员；API 示例需先登录并携带会话 Cookie。
+
 本机 Windows 环境优先使用统一启动器（PowerShell 7）：
 
 ```powershell
@@ -280,6 +282,23 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/queries -Conten
 示例问题：按月统计 2026 年销售收入；各产品线销售收入构成；按地区和产品线统计销售收入。
 
 ## 测试与质量门禁
+
+默认真实验收包含 **121 个用例**：原有 8 道简单题、新增 94 道跨业务域 SQL 题、3 道多阶段分析题，以及 16 道问候、主动澄清和连续追问题。新增业务题覆盖 46 个指标、不同时间/分组口径、最新库存快照、零值和空结果；尚不能代表全部 61 个指标的质量。连续追问用例传入显式历史问题上下文，历史持久化与失败恢复另由接口和故障注入测试验证。
+
+```powershell
+# 完整验收；报告逐题原子保存，包含正确率、P50/P95、Token 和各 Agent 用量。
+& .\scripts\chatbi.ps1 evaluate
+# 27 题快速验收；两个候选使用同一批题，均关闭推理。
+& .\scripts\chatbi.ps1 evaluate -CompareModels @('deepseek-v4-pro','deepseek-flash')
+# 中断后继续同一轮（模型、代码、指标、题库或策略变化时拒绝续跑）。
+& .\scripts\chatbi.ps1 evaluate -ResumeEvaluation
+```
+
+`-EvaluationProfile smoke` 运行 27 题，`full` 为默认的 121 题。对比报告保存在本机 `reports/model-comparison.json`，先比较通过门禁后的准确率，再按简单查询 P95 排序；不自动修改运行配置。候选选型之后仍应完整验收。题库标准 SQL 在模型调用之前应通过只读 MySQL 联测；结构检查会验证字段与安全边界。
+
+模型可按 `LLM_SQL_MODEL`、`LLM_PLANNER_MODEL`、`LLM_EXECUTOR_MODEL`、`LLM_VALIDATOR_MODEL` 和 `LLM_SUMMARY_MODEL` 分工，空值继承 `LLM_MODEL`，接口和密钥仍共用。`LLM_THINKING=auto` 不传厂商扩展；接口支持时可选 `enabled` 或 `disabled`。本机启动器配置 `.runtime/launcher.json` 对应 `LlmBaseUrl`、`LlmModel`、`LlmThinking`、`LlmSqlModel`、`LlmPlannerModel`、`LlmExecutorModel`、`LlmValidatorModel`、`LlmSummaryModel`；显式进程环境优先。修改后执行 `scripts/chatbi.ps1 restart`。
+
+看板同时展示当前模型分工和报告配置，指纹覆盖接口、各角色模型、推理开关、温度、Token 上限、执行策略及发布指标版本。缺少指纹的旧报告、配置变化或未完成的评测会明确提示重新验收；历史通过结果不作为当前配置的验收结论。原始密钥和 URL 内的账号、查询参数不会写入此指纹。真实模型门禁要求启用路由时的业务问题由千问实际分类，回退规则即使得到正确 SQL 也不能获得完整验收通过；本地问候识别属于正常路径。
 
 仓库新增两条 GitHub Actions 工作流（提交到 GitHub 后生效）：
 
