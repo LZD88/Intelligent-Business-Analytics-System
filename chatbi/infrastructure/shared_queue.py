@@ -83,7 +83,7 @@ class SharedQueue:
             for query_id in expired:
                 self.history.event(query_id,"lease_expired",{"message":"Worker 租约失效，任务已中断；未自动重放模型或数据库调用。"})
             if row:
-                query_id,question,deadline=row
+                query_id, question, deadline = row[0], row[1], row[2]
                 with self.lock:
                     self.claims[query_id]=token
                 self.local.claim=(query_id,token)

@@ -155,10 +155,16 @@ class QueryHistory:
                 db.execute("DELETE FROM analysis_checkpoints WHERE query_id=?", (query_id,))
         self.event(query_id, status, error)
         with self.connect() as db:
+            # Each workspace owns its retention quota; another user cannot evict it.
+            row = db.execute("SELECT request_options FROM queries WHERE id=?", (query_id,)).fetchone()
+            options = json.loads(row[0] or "{}") if row else {}
+            scope = {key: options[key] for key in ("owner", "tenant", "source_id")} if all(key in options for key in ("owner", "tenant", "source_id")) else None
+            where, values = self.scope_clause(scope)
+            if scope is None:
+                where = "json_extract(request_options,'$.owner') IS NULL"
             db.execute("""DELETE FROM queries WHERE id IN (
-              SELECT id FROM queries WHERE favorite=0 AND status NOT IN ('queued','running','cancelling','suspended')
-              ORDER BY created_at DESC LIMIT -1 OFFSET ?
-            )""", (self.retain,))
+              SELECT id FROM queries WHERE favorite=0 AND status NOT IN ('queued','running','cancelling','suspended') AND """
+              + where + " ORDER BY created_at DESC LIMIT -1 OFFSET ?)", (*values, self.retain))
 
     def list_history(self, limit: int = 30, offset: int = 0, favorites: bool = False, *, scope: dict | None = None) -> list[dict[str, Any]]:
         where, values = self.scope_clause(scope)

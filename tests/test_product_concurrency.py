@@ -15,6 +15,66 @@ from tests.test_failure_control import executor, VALID_SQL
 from tests.test_query_jobs import wait_until
 
 
+def _claim_from_process(path, ready, start, output):
+    """Spawn-compatible real OS worker; each has its own connections and lease."""
+    from queue import Empty
+    from pathlib import Path
+    queue = SharedQueue(QueryHistory(Path(path)), 8, 60, 5)
+    ready.put(True)
+    try:
+        start.wait(10)
+        try:
+            identity, question, _deadline = queue.get(timeout=1)
+            output.put((identity, question))
+            queue.history.finish(identity, "succeeded", response={"process": True})
+            queue.task_done()
+        except Empty:
+            output.put(None)
+    finally:
+        queue.close()
+
+
+def test_separate_os_processes_claim_one_durable_job(tmp_path):
+    import multiprocessing
+    from uuid import uuid4
+    ctx = multiprocessing.get_context("spawn")
+    history = QueryHistory(tmp_path / ("process-" + uuid4().hex + ".db"))
+    queue = SharedQueue(history, 8, 60, 5)
+    history.create("shared", "跨进程任务")
+    queue.put_nowait(("shared", "跨进程任务", 0))
+    ready, output, start = ctx.Queue(), ctx.Queue(), ctx.Event()
+    processes = [ctx.Process(target=_claim_from_process, args=(str(history.path), ready, start, output)) for _ in range(2)]
+    try:
+        for process in processes:
+            process.start()
+        for _ in processes:
+            assert ready.get(timeout=15)
+        start.set()
+        results = [output.get(timeout=15) for _ in processes]
+        assert results.count(("shared", "跨进程任务")) == 1
+        assert results.count(None) == 1
+        assert history.get("shared")["status"] == "succeeded"
+        for process in processes:
+            process.join(timeout=5)
+            assert process.exitcode == 0
+    finally:
+        start.set()
+        for process in processes:
+            if process.is_alive():
+                process.terminate()
+            process.join(timeout=5)
+        queue.close()
+
+
+def test_retention_quota_is_independent_per_owner_and_source(tmp_path):
+    history = QueryHistory(tmp_path / "history.db", retain=1)
+    for identity, owner, source in [("a", "alice", "demo"), ("b", "bob", "demo"), ("c", "alice", "custom"), ("d", "alice", "demo")]:
+        history.create(identity, identity, options={"owner": owner, "tenant": "default", "source_id": source})
+        history.finish(identity, "succeeded", response={"ok": True})
+    assert history.get("a") is None
+    assert all(history.get(identity) for identity in ("b", "c", "d"))
+
+
 def test_two_process_style_runners_claim_once_and_cancel_shared_job(tmp_path):
     history = QueryHistory(tmp_path / "history.db")
     started, release = Event(), Event()

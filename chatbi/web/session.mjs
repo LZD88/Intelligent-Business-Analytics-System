@@ -27,6 +27,12 @@ export async function requireSession() {
   if (!sources.items?.some(item => item.id === selectedSource())) {
     sessionStorage.setItem("chatbi-source", sources.items?.[0]?.id || "demo");
   }
+  const current = sources.items?.find(item => item.id === selectedSource());
+  if (current && current.id !== "demo") {
+    for (const node of document.querySelectorAll("[data-table-count]")) node.textContent = Object.keys(current.schema).length;
+    for (const node of document.querySelectorAll("[data-field-count]")) node.textContent = Object.values(current.schema).reduce((sum, fields) => sum + fields.length, 0);
+    for (const node of document.querySelectorAll("[data-demo-examples]")) node.hidden = true;
+  }
   const sidebar = document.querySelector(".sidebar");
   if (sidebar) {
     const label = document.createElement("label");

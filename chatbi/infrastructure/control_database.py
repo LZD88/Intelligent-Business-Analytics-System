@@ -51,6 +51,7 @@ class PostgreSQL:
             return Cursor(self.connection.execute("SELECT ordinal_position-1 AS cid,column_name AS name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=%s", (table,)))
         if query.startswith(("PRAGMA ", "BEGIN")):
             return Cursor(self.connection.execute("SELECT 1"))
+        query = query.replace("name=? COLLATE NOCASE", "lower(name)=lower(?)")
         query = query.replace(" COLLATE NOCASE", "")
         query = re.sub(r"\bREAL\b", "DOUBLE PRECISION", query)
         query = query.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
@@ -77,6 +78,8 @@ class PostgreSQL:
         for statement in script.split(";"):
             if statement.strip():
                 self.execute(statement.strip())
+        if "CREATE TABLE IF NOT EXISTS metrics (" in script:
+            self.execute("CREATE UNIQUE INDEX IF NOT EXISTS metrics_name_folded ON metrics(lower(name))")
 
     def __enter__(self):
         return self

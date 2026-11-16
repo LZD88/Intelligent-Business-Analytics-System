@@ -572,9 +572,6 @@ def create_app(
             nonlocal cursor
             ticks = 0
             while not await request.is_disconnected():
-                for event in await run_in_threadpool(app.state.history.events, query_id, cursor):
-                    cursor = event["sequence"]
-                    yield f"id: {cursor}\nevent: progress\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
                 item = await run_in_threadpool(app.state.history.get, query_id)
                 if resolved.auth_enabled and not product.store.authenticate(request.cookies.get("chatbi_session")):
                     return
@@ -583,6 +580,9 @@ def create_app(
                         return
                 except AccessDenied:
                     return
+                for event in await run_in_threadpool(app.state.history.events, query_id, cursor):
+                    cursor = event["sequence"]
+                    yield f"id: {cursor}\nevent: progress\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
                 if item is None or item["status"] in TERMINAL:
                     yield "event: done\ndata: {}\n\n"
                     return
@@ -609,7 +609,7 @@ def create_app(
             raise HTTPException(409, "只有已完成结果可以下钻。")
         response = item["response"]
         service = scoped_service() if service_factory is build_query_service else app.state.query_service
-        with app.state.catalog_lock:
+        try:
             if response.get("catalog_revision") != product.catalog().snapshot()[0]:
                 raise HTTPException(409, "指标版本已变更，请重新分析后下钻。")
             try:
@@ -619,8 +619,9 @@ def create_app(
             secured = service.security.secure(sql, service.user_context)
             columns, rows = service.database.execute(secured)
             columns, rows = service.security.mask_result(columns, rows, service.user_context)
-        if service_factory is build_query_service:
-            service.database.close()
+        finally:
+            if service_factory is build_query_service:
+                service.database.close()
         return {"columns": columns, "rows": rows, "sql": secured.sql,
                 "truncated": secured.limited and len(rows) >= secured.max_rows,
                 "note": "按原查询时间和筛选读取当前数据库明细；关联行不保证一行一单。达到行数上限时仅显示部分，不应用于核对总量。",

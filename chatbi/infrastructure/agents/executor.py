@@ -180,7 +180,9 @@ class ExecutionAgent:
                             progress("circuit_open", step_id=step.step_id, message="核心任务失败，停止调度并协作取消并行分支")
                     by_id[step.step_id] = result
                     progress("step_finished", step_id=step.step_id, status=result.status.value,
-                             row_count=result.row_count, message=f"{step.step_name}：{result.status.value}")
+                             row_count=result.row_count, message=f"{step.step_name}：" + {
+                                 "succeeded": "执行成功", "failed": "执行失败", "skipped": "降级跳过", "blocked": "熔断阻止"
+                             }.get(result.status.value, "执行结束"))
         return [by_id[step.step_id] for step in plan.steps]
 
     def _run_step(
