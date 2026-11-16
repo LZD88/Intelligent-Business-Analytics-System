@@ -48,6 +48,7 @@ def test_chinese_manufacturing_cost_is_not_a_causal_assertion():
 def test_null_warning_is_not_a_zero_value_claim():
     evidence = [refs()[0].model_copy(update={"value": None})]
     verify_text("同比为NULL，不能填0。", evidence)
+    verify_text("同期为NULL，未填0。", evidence)
     with pytest.raises(ValueError):
         verify_text("同比为0。", evidence)
     verify_text("用户阈值0.8。", [], thresholds={.8})

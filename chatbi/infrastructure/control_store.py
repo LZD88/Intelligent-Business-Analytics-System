@@ -65,7 +65,19 @@ class ControlStore:
         db = connect_control(self.path, timeout=15)
         db.row_factory = sqlite3.Row
         try:
-            db.execute("PRAGMA journal_mode=WAL")
+            # Setting journal mode races on an empty database even with busy_timeout.
+            # Once established, avoid taking its schema lock on every request.
+            if isinstance(db, sqlite3.Connection):
+                deadline = time.monotonic() + 15
+                while True:
+                    try:
+                        if db.execute("PRAGMA journal_mode").fetchone()[0] != "wal":
+                            db.execute("PRAGMA journal_mode=WAL")
+                        break
+                    except sqlite3.OperationalError as exc:
+                        if getattr(exc, "sqlite_errorcode", None) not in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED} or time.monotonic() >= deadline:
+                            raise
+                        time.sleep(.02)
             with db:
                 yield db
         finally:

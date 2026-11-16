@@ -75,6 +75,21 @@ def test_retention_quota_is_independent_per_owner_and_source(tmp_path):
     assert all(history.get(identity) for identity in ("b", "c", "d"))
 
 
+def test_concurrent_first_control_store_initialization(tmp_path):
+    from chatbi.infrastructure.control_store import ControlStore, Principal
+    barrier = Barrier(8)
+    path = tmp_path / "fresh-control.db"
+    def initialize(index):
+        barrier.wait(timeout=10)
+        store = ControlStore(path)
+        store.audit(Principal(), "startup", str(index))
+        return store.needs_setup()
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        assert all(pool.map(initialize, range(8)))
+    with ControlStore(path).connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM control_audit").fetchone()[0] == 8
+
+
 def test_two_process_style_runners_claim_once_and_cancel_shared_job(tmp_path):
     history = QueryHistory(tmp_path / "history.db")
     started, release = Event(), Event()

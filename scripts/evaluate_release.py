@@ -124,7 +124,8 @@ def evaluate(settings: Settings, *, profile: str = "full", output: Path | None =
                 "passed": complete and simple["passed_mvp_threshold"] and complex_report["passed"] and behavioral["passed"] and intent_verified and not changed and not config_changed}
 
     try:
-        for section, cases in (("simple", simple_cases), ("complex", complex_cases), ("behavior", behaviors)):
+        # Exercise expensive planning/report contracts early; still run every case.
+        for section, cases in (("complex", complex_cases), ("behavior", behaviors), ("simple", simple_cases)):
             finished = {row["id"] for row in records[section]}
             for case in cases:
                 if case["id"] in finished:

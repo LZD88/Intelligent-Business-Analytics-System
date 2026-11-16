@@ -77,7 +77,7 @@ def verify_text(text, evidence, *, extras=(), counts=(), thresholds=()):
         if actual in thresholds and re.search(r"(?:高于|低于|超过|大于|小于|阈值)(?:阈值)?\s*$", cleaned[:match.start()]):
             continue
         if actual == 0 and any(ref.value is None for ref in evidence) and re.search(
-                r"(?:不能|不得|不应|不)(?:填|填成|填为|置为)\s*$", cleaned[:match.start()]):
+                r"(?:不能|不得|不应|不|未)(?:填|填成|填为|置为)\s*$", cleaned[:match.start()]):
             continue
         # Match explicit display precision, including rounded 万/亿 units.
         # This is half a display unit, not an amount-dependent relative tolerance.
