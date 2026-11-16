@@ -11,7 +11,7 @@ async function api(url, method = "GET", body) {
   const data = await r.json(); if(!r.ok)throw new Error(typeof data.detail === "string" ? data.detail : data.message || "操作失败"); return data;
 }
 function action(label, fn) { const button=document.createElement("button");button.className="text-button";button.textContent=label;button.onclick=()=>run(fn);return button; }
-async function run(fn){try{await fn();message("操作完成");}catch(e){message(e.message);}}
+async function run(fn){try{message("");await fn();if(!$("#management-message").textContent)message("操作完成");}catch(e){message(e.message);}}
 $("#account").textContent=`${state.user.username} · ${state.user.tenant_id} · ${roleLabel(state.user.role)}`;
 for(const node of document.querySelectorAll("[data-admin]"))node.hidden=state.user.role!=="admin";
 $("#user-form [name=tenant]").value=state.user.tenant_id;

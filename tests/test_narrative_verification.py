@@ -13,6 +13,13 @@ def test_evidenced_difference_and_comparison():
     verify_text("这些结果不能证明维护导致成本变化。", refs())
 
 
+def test_explicit_money_units_use_display_precision_only():
+    evidence = [refs()[0].model_copy(update={"value": 1234567})]
+    verify_text("金额为123.46万元。", evidence)
+    with pytest.raises(ValueError):
+        verify_text("金额为123.47万元。", evidence)
+
+
 @pytest.mark.parametrize("text",["金额为999。","金额120低于100。","维护导致成本下降。","保证提升20%。"])
 def test_fabricated_number_false_direction_and_causality(text):
     with pytest.raises(ValueError):

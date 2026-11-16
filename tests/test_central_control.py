@@ -44,3 +44,5 @@ def test_postgresql_shared_identities_catalog_and_leased_queue(tmp_path, monkeyp
     for action in ("submit","publish"):
         catalog.transition(created["id"],1,action,CatalogDecision(actor=admin.user_id,note="验证"))
     assert MetricRegistry(tmp_path/"other-host"/catalog.path.name,seed=False).snapshot()[1].indicators["测试订单数"]
+    from tests.test_product_concurrency import test_separate_os_processes_claim_one_durable_job
+    test_separate_os_processes_claim_one_durable_job(tmp_path)

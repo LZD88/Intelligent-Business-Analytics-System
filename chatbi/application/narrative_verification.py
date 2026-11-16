@@ -50,9 +50,15 @@ def verify_text(text, evidence, *, extras=()):
         if re.match(r"(?:条建议|个步骤|个节点|项发现)", suffix):
             continue
         actual = number(match[0])
-        # A 0.01 display rounding tolerance, never a relative tolerance that grows with amounts.
+        # Match explicit display precision, including rounded 万/亿 units.
+        # This is half a display unit, not an amount-dependent relative tolerance.
+        tolerance = Decimal("0.01")
+        if "万" in match[0] or "亿" in match[0]:
+            digits = re.search(r"\d[\d,]*(?:\.(\d+))?", match[0])
+            scale = Decimal(100000000 if "亿" in match[0] else 10000)
+            tolerance = scale * Decimal(10) ** (-len((digits[1] if digits else "") or "")) / 2
         candidates = allowed | ({v * 100 for v in values} if "%" in match[0] or "％" in match[0] else set())
-        if not any(abs(actual - candidate) <= Decimal("0.01") for candidate in candidates):
+        if not any(abs(actual - candidate) <= tolerance for candidate in candidates):
             raise ValueError("正文含无对应证据的数值，须删除或引用真实单元格及可核算差额")
     for clause in re.split(r"[。；;\n]", text):
         for match in CAUSAL.finditer(clause):

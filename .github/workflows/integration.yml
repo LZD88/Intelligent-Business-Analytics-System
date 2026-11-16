@@ -75,7 +75,7 @@ jobs:
           x.execute('GRANT SELECT ON chatbi_mvp.* TO chatbi_reader@\'%\'');
           c.close()"
       - name: Real MySQL and Chroma tests
-        run: uv run pytest tests/test_benchmark_cases.py tests/test_simple_semantic.py tests/test_p0_integration.py tests/test_p2_integration.py tests/test_failure_control_integration.py -q --junitxml=reports/integration-tests.xml
+        run: uv run pytest tests/test_benchmark_cases.py tests/test_simple_semantic.py tests/test_p0_integration.py tests/test_p2_integration.py tests/test_failure_control_integration.py tests/test_data_source_integration.py -q --junitxml=reports/integration-tests.xml
       - name: Reject silently skipped integration tests
         run: >-
           uv run python -c "import xml.etree.ElementTree as E;
