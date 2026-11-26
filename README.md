@@ -15,36 +15,35 @@ ChatBI 是支持账号、租户隔离和真实 MySQL 接入的智能业务分析
 ### 系统总览
 
 ```mermaid
-flowchart TB
-    web["业务用户 / Agent 对话工作台<br/>问数 · 图表 · 报告 · 管理"]
-    web --> api["FastAPI / SSE<br/>身份认证 · 租户与数据源隔离"]
-    api --> jobs["持久化任务调度<br/>多 Worker · 进度 · 取消 · 续跑"]
-    jobs --> intent{"意图识别<br/>千问 qwen-plus / 本地规则"}
+flowchart LR
+    web["Agent 对话工作台<br/>用户提问 / 查看报告"]
+    web --> api["FastAPI / SSE<br/>认证 · 隔离 · 任务调度"]
+    api --> intent{"意图识别<br/>千问 / 本地规则"}
 
     intent -->|普通对话| reply["直接回复<br/>不执行 SQL"]
-    intent -->|简单查询| simple["简单查询链路<br/>指标与 Schema 召回 → Text-to-SQL"]
-    intent -->|复杂查询| complex["Plan-and-Execute<br/>规划 Agent → 执行 Agent → 总结 Agent"]
+    intent -->|简单查询| simple["简单查询<br/>检索 → Text-to-SQL"]
+    intent -->|复杂查询| complex["Plan-and-Execute<br/>规划 → 执行 → 总结"]
 
-    simple --> sql["统一 SQL 执行边界<br/>AST 只读校验 · 表字段与行权限<br/>连接池 · 超时 · 结果复核"]
+    simple --> sql["统一 SQL 执行边界<br/>AST · 权限 · 只读查询"]
     complex -->|子任务 SQL| sql
-    sql --> mysql[("MySQL 8.0<br/>演示库 / 授权业务库")]
+    sql --> mysql[("MySQL 8.0<br/>授权业务数据库")]
 
-    knowledge["治理上下文<br/>已发布指标 · 授权 Schema<br/>已审核纠错案例"] -.-> simple
+    knowledge["治理上下文<br/>指标 · Schema · 审核案例"] -.-> simple
     knowledge -.-> complex
-    chroma[("Chroma · Linux 虚拟机<br/>指标 / 表 / 字段检索索引")] -.-> knowledge
-    control[("控制与任务存储<br/>同机 SQLite / 多机 PostgreSQL<br/>账号 · 授权 · 目录 · 历史 · 租约 · 断点")] -.-> api
+    chroma[("Chroma / Linux VM<br/>指标 · 表 · 字段索引")] -.-> knowledge
+    control[("SQLite / PostgreSQL<br/>身份 · 目录 · 历史 · 断点")] -.-> api
 
     classDef entry fill:#eef2ff,stroke:#818cf8,color:#1e1b4b
     classDef agent fill:#f3e8ff,stroke:#a78bfa,color:#3b0764
     classDef storage fill:#ecfdf5,stroke:#34d399,color:#064e3b
     classDef guard fill:#fff7ed,stroke:#fb923c,color:#7c2d12
-    class web,api,jobs entry
+    class web,api entry
     class simple,complex,knowledge,reply agent
     class mysql,chroma,control storage
     class intent,sql guard
 ```
 
-普通联表也可以走简单查询。演示源使用 Chroma 检索，服务不可用时回退到本地治理 Schema；自定义业务源使用已授权的表字段及真实类型，并维护独立指标目录。SQL 与结果、执行进度和中文报告通过 API / SSE 回到工作台。
+普通联表也可以走简单查询。演示源使用 Chroma 检索，服务不可用时回退到本地治理 Schema；自定义业务源使用已授权的表字段及真实类型，并维护独立指标目录。任务调度支持多 Worker、进度、取消和断点续跑；SQL 执行使用连接池、超时控制和结果复核。控制与任务存储同机使用 SQLite，多机可选 PostgreSQL。SQL 与结果、执行进度和中文报告通过 API / SSE 回到工作台。
 
 <details>
 <summary><strong>查看复杂查询：三 Agent 协作与失败管控</strong></summary>
