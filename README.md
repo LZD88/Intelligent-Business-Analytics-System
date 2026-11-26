@@ -16,22 +16,22 @@ ChatBI 是支持账号、租户隔离和真实 MySQL 接入的智能业务分析
 
 ```mermaid
 flowchart LR
-    web["Agent 对话工作台<br/>用户提问 / 查看报告"]
-    web --> api["FastAPI / SSE<br/>认证 · 隔离 · 任务调度"]
+    web["Agent 工作台<br/>提问 · 图表 · 报告"]
+    web --> api["FastAPI / SSE<br/>认证 · 隔离 · 调度"]
     api --> intent{"意图识别<br/>千问 / 本地规则"}
 
     intent -->|普通对话| reply["直接回复<br/>不执行 SQL"]
-    intent -->|简单查询| simple["简单查询<br/>检索 → Text-to-SQL"]
-    intent -->|复杂查询| complex["Plan-and-Execute<br/>规划 → 执行 → 总结"]
+    intent -->|简单查询| simple["简单查询<br/>检索 → 生成 SQL"]
+    intent -->|复杂查询| complex["复杂分析<br/>规划 · 执行 · 总结"]
 
-    simple --> sql["统一 SQL 执行边界<br/>AST · 权限 · 只读查询"]
+    simple --> sql["SQL 安全执行<br/>AST · 权限 · 只读"]
     complex -->|子任务 SQL| sql
-    sql --> mysql[("MySQL 8.0<br/>授权业务数据库")]
+    sql --> mysql[("MySQL 8.0<br/>授权业务库")]
 
-    knowledge["治理上下文<br/>指标 · Schema · 审核案例"] -.-> simple
+    knowledge["治理上下文<br/>指标 · Schema<br/>已审核案例"] -.-> simple
     knowledge -.-> complex
-    chroma[("Chroma / Linux VM<br/>指标 · 表 · 字段索引")] -.-> knowledge
-    control[("SQLite / PostgreSQL<br/>身份 · 目录 · 历史 · 断点")] -.-> api
+    chroma[("Chroma / VM<br/>语义检索索引")] -.-> knowledge
+    control[("SQLite / PostgreSQL<br/>身份 · 目录<br/>历史 · 断点")] -.-> api
 
     classDef entry fill:#eef2ff,stroke:#818cf8,color:#1e1b4b
     classDef agent fill:#f3e8ff,stroke:#a78bfa,color:#3b0764
