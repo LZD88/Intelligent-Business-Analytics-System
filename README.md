@@ -15,8 +15,8 @@ ChatBI 是支持账号、租户隔离和真实 MySQL 接入的智能业务分析
 ### 系统总览
 
 ```mermaid
-flowchart LR
-    user["业务用户"] --> web["Agent 对话工作台<br/>问数 · 图表 · 报告 · 管理"]
+flowchart TB
+    web["业务用户 / Agent 对话工作台<br/>问数 · 图表 · 报告 · 管理"]
     web --> api["FastAPI / SSE<br/>身份认证 · 租户与数据源隔离"]
     api --> jobs["持久化任务调度<br/>多 Worker · 进度 · 取消 · 续跑"]
     jobs --> intent{"意图识别<br/>千问 qwen-plus / 本地规则"}
@@ -33,14 +33,12 @@ flowchart LR
     knowledge -.-> complex
     chroma[("Chroma · Linux 虚拟机<br/>指标 / 表 / 字段检索索引")] -.-> knowledge
     control[("控制与任务存储<br/>同机 SQLite / 多机 PostgreSQL<br/>账号 · 授权 · 目录 · 历史 · 租约 · 断点")] -.-> api
-    control -.-> jobs
-    control -.-> knowledge
 
     classDef entry fill:#eef2ff,stroke:#818cf8,color:#1e1b4b
     classDef agent fill:#f3e8ff,stroke:#a78bfa,color:#3b0764
     classDef storage fill:#ecfdf5,stroke:#34d399,color:#064e3b
     classDef guard fill:#fff7ed,stroke:#fb923c,color:#7c2d12
-    class user,web,api,jobs entry
+    class web,api,jobs entry
     class simple,complex,knowledge,reply agent
     class mysql,chroma,control storage
     class intent,sql guard
@@ -48,7 +46,9 @@ flowchart LR
 
 普通联表也可以走简单查询。演示源使用 Chroma 检索，服务不可用时回退到本地治理 Schema；自定义业务源使用已授权的表字段及真实类型，并维护独立指标目录。SQL 与结果、执行进度和中文报告通过 API / SSE 回到工作台。
 
-### 复杂查询：三 Agent 协作
+<details>
+<summary><strong>查看复杂查询：三 Agent 协作与失败管控</strong></summary>
+
 
 ```mermaid
 flowchart TB
@@ -77,6 +77,8 @@ flowchart TB
 ```
 
 规划与总结 Agent 不直接访问业务数据库，所有模型生成的 SQL 都经过统一安全边界。最终结果及其全部前置依赖强制为高权重；核心失败耗尽恢复预算后停止总结并保存断点。报告建议必须引用具体对象和数值证据，数据不足时明确说明；机器核验不替代人工业务判断。
+
+</details>
 
 ## 指标定义规范
 
