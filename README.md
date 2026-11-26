@@ -10,6 +10,75 @@ ChatBI 是支持账号、租户隔离和真实 MySQL 接入的智能业务分析
 
 复杂查询 API 返回 `plan`、`step_results`、`summary` 和 `report`，同时提供 `analysis_report`、`report_markdown`、`report_source`、`agent_mode` 和 `agent_timings_ms`。原有 `sql`、`columns` 和 `rows` 映射到计划指定的最终结果步骤；简单查询的 Agent 扩展字段为空。
 
+## 系统架构
+
+### 系统总览
+
+```mermaid
+flowchart LR
+    web["Agent 工作台<br/>提问 · 图表 · 报告"]
+    web --> api["FastAPI / SSE<br/>认证 · 隔离 · 调度"]
+    api --> intent{"意图识别<br/>千问 / 本地规则"}
+
+    intent -->|普通对话| reply["直接回复<br/>不执行 SQL"]
+    intent -->|简单查询| simple["简单查询<br/>检索 → 生成 SQL"]
+    intent -->|复杂查询| complex["复杂分析<br/>规划 · 执行 · 总结"]
+
+    simple --> sql["SQL 安全执行<br/>AST · 权限 · 只读"]
+    complex -->|子任务 SQL| sql
+    sql --> mysql[("MySQL 8.0<br/>授权业务库")]
+
+    knowledge["治理上下文<br/>指标 · Schema<br/>已审核案例"] -.-> simple
+    knowledge -.-> complex
+    chroma[("Chroma / VM<br/>语义检索索引")] -.-> knowledge
+    control[("SQLite / PostgreSQL<br/>身份 · 目录<br/>历史 · 断点")] -.-> api
+
+    classDef entry fill:#eef2ff,stroke:#818cf8,color:#1e1b4b
+    classDef agent fill:#f3e8ff,stroke:#a78bfa,color:#3b0764
+    classDef storage fill:#ecfdf5,stroke:#34d399,color:#064e3b
+    classDef guard fill:#fff7ed,stroke:#fb923c,color:#7c2d12
+    class web,api entry
+    class simple,complex,knowledge,reply agent
+    class mysql,chroma,control storage
+    class intent,sql guard
+```
+
+普通联表也可以走简单查询。演示源使用 Chroma 检索，服务不可用时回退到本地治理 Schema；自定义业务源使用已授权的表字段及真实类型，并维护独立指标目录。任务调度支持多 Worker、进度、取消和断点续跑；SQL 执行使用连接池、超时控制和结果复核。控制与任务存储同机使用 SQLite，多机可选 PostgreSQL。SQL 与结果、执行进度和中文报告通过 API / SSE 回到工作台。
+
+<details>
+<summary><strong>查看复杂查询：三 Agent 协作与失败管控</strong></summary>
+
+
+```mermaid
+flowchart TB
+    context["用户问题 + 指标口径 + 精简 Schema"] --> plan["规划 Agent<br/>拆解目标 · 输出契约 · 依赖与权重"]
+    plan --> contract["计划校验与 DAG 调度<br/>可选人工确认 · 独立分支有界并行"]
+    contract --> execute["执行 Agent<br/>逐步生成 SQL · 绑定上游真实结果"]
+    execute --> query["AST 与权限校验 → MySQL 只读执行"]
+    query --> validate["输出契约与结果复核<br/>类型 · 业务口径 · 显式总分校验"]
+    validate -->|成功产物供后续步骤使用| contract
+    validate -->|核心结果就绪，辅助缺失已披露| summary["总结 Agent<br/>引用成功步骤的真实单元格"]
+    summary --> verify["报告核验<br/>证据 · 正文数值 · 比较 · 因果措辞"]
+    verify -->|通过| report["中文分析报告<br/>核心发现 · 证据 · 有据建议 / 数据不足说明"]
+    verify -->|有界修复仍失败| fallback["可信模板回退<br/>披露局限与人工复核边界"]
+
+    validate -.->|可修复错误| heal["局部自愈<br/>受控错误反思 · 有界重试"]
+    heal -.-> execute
+    validate -.->|低权重步骤失败| skip["跳过辅助步骤<br/>继续其余分支并披露缺失"]
+    validate -.->|高权重步骤失败| suspend["级联熔断并挂起<br/>保存产物与断点 · 人工确认续跑"]
+
+    classDef agent fill:#f3e8ff,stroke:#a78bfa,color:#3b0764
+    classDef guard fill:#fff7ed,stroke:#fb923c,color:#7c2d12
+    classDef result fill:#ecfdf5,stroke:#34d399,color:#064e3b
+    class plan,execute,summary agent
+    class contract,query,validate,verify,heal,suspend guard
+    class report,fallback,skip result
+```
+
+规划与总结 Agent 不直接访问业务数据库，所有模型生成的 SQL 都经过统一安全边界。最终结果及其全部前置依赖强制为高权重；核心失败耗尽恢复预算后停止总结并保存断点。报告建议必须引用具体对象和数值证据，数据不足时明确说明；机器核验不替代人工业务判断。
+
+</details>
+
 ## 指标定义规范
 
 `indicators.json` 中每个指标必须包含以下六个治理字段，缺失、空值、未知依赖、重复名称或循环依赖都会在加载时被拒绝：
